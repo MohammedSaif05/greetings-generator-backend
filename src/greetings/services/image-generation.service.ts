@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { TemplateDocument } from '../../templates/schemas/template.schema';
 import { CsvRowDto } from '../dto/csv-row.dto';
 import { R2Service } from '../../services/r2.service';
+import { GoogleFontsService } from '../../services/google-fonts.service';
 
 interface TextAreaMapping {
   recipientName?: string;
@@ -40,7 +41,10 @@ interface TextArea {
 
 @Injectable()
 export class ImageGenerationService {
-  constructor(private readonly r2Service: R2Service) {}
+  constructor(
+    private readonly r2Service: R2Service,
+    private readonly googleFontsService: GoogleFontsService,
+  ) {}
 
   /**
    * Downloads an image from R2 using the SDK (for internal backend processing).
@@ -84,6 +88,47 @@ export class ImageGenerationService {
       .replace(/'/g, '&apos;');
   }
 
+  /**
+   * Simple word-wrapping helper that breaks text into lines with at most
+   * maxChars characters per line (tries to break on spaces first).
+   */
+  private wrapText(text: string, maxChars: number): string[] {
+    if (maxChars <= 0) {
+      return [text];
+    }
+
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (testLine.length <= maxChars) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        // If the word itself is longer than maxChars, hard-split it
+        if (word.length > maxChars) {
+          const chunks = word.match(new RegExp(`.{1,${maxChars}}`, 'g')) || [
+            word,
+          ];
+          lines.push(...chunks.slice(0, -1));
+          currentLine = chunks[chunks.length - 1];
+        } else {
+          currentLine = word;
+        }
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  }
+
   async generateGreetingImage(
     template: TemplateDocument,
     csvRow: CsvRowDto,
@@ -121,17 +166,56 @@ export class ImageGenerationService {
       if (fieldName) {
         const text = csvRow[fieldName];
         if (text && text.trim() !== '') {
-          // Calculate font size that fits within the text area
-          let fontSize = Math.min(
-            typedTextArea.maxFontSize,
-            typedTextArea.height * 0.8,
-          );
-          fontSize = Math.max(fontSize, typedTextArea.minFontSize);
-          const fontFamily = typedTextArea.fontFamily
+          // Calculate font size that fits within the text area (both width & height)
+          // We approximate average character width as 0.55 * fontSize and adjust
+          // down until the wrapped text fits vertically inside the box.
+          let fontSize = typedTextArea.maxFontSize;
+          let lines: string[] = [];
+          const minFontSize = typedTextArea.minFontSize;
+
+          while (fontSize >= minFontSize) {
+            const avgCharWidth = fontSize * 0.55;
+            const maxCharsPerLine = Math.max(
+              1,
+              Math.floor(typedTextArea.width / avgCharWidth),
+            );
+
+            lines = this.wrapText(text, maxCharsPerLine);
+            const totalHeight =
+              lines.length * fontSize * typedTextArea.lineHeight;
+
+            if (totalHeight <= typedTextArea.height) {
+              break;
+            }
+
+            fontSize -= 2; // decrement and retry
+          }
+
+          if (fontSize < minFontSize) {
+            fontSize = minFontSize;
+          }
+
+          const requestedFontFamily = typedTextArea.fontFamily
             .replace('.ttf', '')
             .replace(/\s+/g, ' ');
 
-          // Calculate text position based on alignment
+          // Load Google Font definition (if configured) so the SVG uses the
+          // correct typeface when rendered by Sharp.
+          const fontWeight =
+            typedTextArea.fontWeight !== undefined
+              ? typedTextArea.fontWeight
+              : 400;
+
+          const fontDefinition =
+            await this.googleFontsService.getFontDefinition(
+              requestedFontFamily,
+              fontWeight,
+            );
+
+          const svgFontFamily = fontDefinition.cssFontFamily;
+
+          // Calculate text position based on alignment. We vertically center the
+          // whole block of lines within the text area.
           let textX = typedTextArea.x;
           if (typedTextArea.textAlign === 'center') {
             textX = typedTextArea.x + typedTextArea.width / 2;
@@ -139,7 +223,12 @@ export class ImageGenerationService {
             textX = typedTextArea.x + typedTextArea.width;
           }
 
-          const textY = typedTextArea.y + typedTextArea.height / 2;
+          const totalTextHeight =
+            lines.length * fontSize * typedTextArea.lineHeight;
+          const firstLineY =
+            typedTextArea.y +
+            (typedTextArea.height - totalTextHeight) / 2 +
+            fontSize; // baseline of first line
 
           // Build text shadow filter if provided
           let textShadowFilter = '';
@@ -178,26 +267,45 @@ export class ImageGenerationService {
       />`;
           }
 
-          // Build font weight style
-          const fontWeight =
-            typedTextArea.fontWeight !== undefined
-              ? typedTextArea.fontWeight
-              : 400;
+          const tspanElements = lines
+            .map((line, index) => {
+              const dy = index === 0 ? 0 : fontSize * typedTextArea.lineHeight;
+              return `<tspan x="${textX}" dy="${dy}">${this.escapeXml(
+                line,
+              )}</tspan>`;
+            })
+            .join('');
 
-          // Create SVG with background, text shadow, and text
-          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${textShadowFilter}${backgroundRect}
-      <text
-        x="${textX}"
-        y="${textY}"
-        font-family="${fontFamily}, Arial, sans-serif"
-        font-size="${fontSize}px"
-        font-weight="${fontWeight}"
-        fill="${typedTextArea.fontColor}"
-        text-anchor="${typedTextArea.textAlign === 'center' ? 'middle' : typedTextArea.textAlign === 'right' ? 'end' : 'start'}"
-        dominant-baseline="middle"
-        ${filterId ? `filter="url(#${filterId})"` : ''}
-      >${this.escapeXml(text)}</text>
-    </svg>`;
+          const fontFaceStyle =
+            fontDefinition.styleBlock !== null
+              ? `<style type="text/css">
+${fontDefinition.styleBlock}
+</style>`
+              : '';
+
+          // Create SVG with background, optional @font-face, text shadow, and wrapped text
+          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">
+  ${fontFaceStyle}
+  ${textShadowFilter}
+  ${backgroundRect}
+  <text
+    x="${textX}"
+    y="${firstLineY}"
+    font-family="${svgFontFamily}, Arial, sans-serif"
+    font-size="${fontSize}px"
+    font-weight="${fontWeight}"
+    fill="${typedTextArea.fontColor}"
+    text-anchor="${
+      typedTextArea.textAlign === 'center'
+        ? 'middle'
+        : typedTextArea.textAlign === 'right'
+          ? 'end'
+          : 'start'
+    }"
+  >
+    ${tspanElements}
+  </text>
+</svg>`;
 
           svgOverlays.push({
             input: Buffer.from(svgText),
