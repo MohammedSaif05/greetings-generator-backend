@@ -163,10 +163,14 @@ export class ImageGenerationService {
       fit: 'cover',
     });
 
-    // Collect all SVG overlays for text areas
-    const svgOverlays: Array<{ input: Buffer; top: number; left: number }> = [];
+    // Collect all font definitions, text elements, filters, and backgrounds
+    // We'll build a single SVG overlay with all text areas combined
+    const fontFaceStyles = new Set<string>();
+    const textShadowFilters: string[] = [];
+    const backgroundRects: string[] = [];
+    const textElements: string[] = [];
 
-    // Build SVG overlays for each text area
+    // Process each text area and collect all components
     for (const textArea of template.textAreas) {
       const baseArea = textArea as TextArea;
 
@@ -232,6 +236,11 @@ export class ImageGenerationService {
               fontWeight,
             );
 
+          // Collect font face style if available
+          if (fontDefinition.styleBlock !== null) {
+            fontFaceStyles.add(fontDefinition.styleBlock);
+          }
+
           const svgFontFamily = fontDefinition.cssFontFamily;
 
           // Calculate text position based on alignment. We vertically center the
@@ -251,21 +260,17 @@ export class ImageGenerationService {
             fontSize; // baseline of first line
 
           // Build text shadow filter if provided
-          let textShadowFilter = '';
           let filterId = '';
           if (typedTextArea.textShadow) {
             filterId = `shadow-${typedTextArea.id}`;
             const shadow = typedTextArea.textShadow;
-            textShadowFilter = `
-      <defs>
+            textShadowFilters.push(`
         <filter id="${filterId}" x="-50%" y="-50%" width="200%" height="200%">
           <feDropShadow dx="${shadow.offsetX}" dy="${shadow.offsetY}" stdDeviation="${shadow.blur}" flood-color="${shadow.color}"/>
-        </filter>
-      </defs>`;
+        </filter>`);
           }
 
           // Build background rectangle if enabled
-          let backgroundRect = '';
           if (
             typedTextArea.background?.enabled &&
             typedTextArea.background.color
@@ -275,16 +280,16 @@ export class ImageGenerationService {
             const bgY = typedTextArea.y - bg.padding;
             const bgWidth = typedTextArea.width + bg.padding * 2;
             const bgHeight = typedTextArea.height + bg.padding * 2;
-            backgroundRect = `
-      <rect
-        x="${bgX}"
-        y="${bgY}"
-        width="${bgWidth}"
-        height="${bgHeight}"
-        fill="${bg.color}"
-        rx="${bg.borderRadius}"
-        ry="${bg.borderRadius}"
-      />`;
+            backgroundRects.push(`
+        <rect
+          x="${bgX}"
+          y="${bgY}"
+          width="${bgWidth}"
+          height="${bgHeight}"
+          fill="${bg.color}"
+          rx="${bg.borderRadius}"
+          ry="${bg.borderRadius}"
+        />`);
           }
 
           const tspanElements = lines
@@ -296,50 +301,62 @@ export class ImageGenerationService {
             })
             .join('');
 
-          const fontFaceStyle =
-            fontDefinition.styleBlock !== null
-              ? `<style type="text/css">
-${fontDefinition.styleBlock}
-</style>`
-              : '';
-
-          // Create SVG with background, optional @font-face, text shadow, and wrapped text
-          const svgText = `<svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg">
-  ${fontFaceStyle}
-  ${textShadowFilter}
-  ${backgroundRect}
-  <text
-    x="${textX}"
-    y="${firstLineY}"
-    font-family="${svgFontFamily}, Arial, sans-serif"
-    font-size="${fontSize}px"
-    font-weight="${fontWeight}"
-    fill="${typedTextArea.fontColor}"
-    text-anchor="${
-      typedTextArea.textAlign === 'center'
-        ? 'middle'
-        : typedTextArea.textAlign === 'right'
-          ? 'end'
-          : 'start'
-    }"
-  >
-    ${tspanElements}
-  </text>
-</svg>`;
-
-          svgOverlays.push({
-            input: Buffer.from(svgText),
-            top: 0,
-            left: 0,
-          });
+          // Build the text element
+          textElements.push(`
+        <text
+          x="${textX}"
+          y="${firstLineY}"
+          font-family="${svgFontFamily}, Arial, sans-serif"
+          font-size="${fontSize}px"
+          font-weight="${fontWeight}"
+          fill="${typedTextArea.fontColor}"
+          text-anchor="${
+            typedTextArea.textAlign === 'center'
+              ? 'middle'
+              : typedTextArea.textAlign === 'right'
+                ? 'end'
+                : 'start'
+          }"
+          ${filterId ? `filter="url(#${filterId})"` : ''}
+        >
+          ${tspanElements}
+        </text>`);
         }
       }
     }
 
-    // Apply all text overlays at once using composite
-    // This ensures text is baked into the image before any resizing
-    if (svgOverlays.length > 0) {
-      image = image.composite(svgOverlays);
+    // Build a single SVG overlay with all text areas combined
+    if (textElements.length > 0) {
+      const allFontFaces = Array.from(fontFaceStyles).join('\n');
+      const fontFaceStyleBlock =
+        allFontFaces.length > 0
+          ? `<style type="text/css">
+${allFontFaces}
+</style>`
+          : '';
+
+      const defsBlock =
+        textShadowFilters.length > 0
+          ? `<defs>
+${textShadowFilters.join('\n')}
+      </defs>`
+          : '';
+
+      const svgText = `<svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  ${fontFaceStyleBlock}
+  ${defsBlock}
+  ${backgroundRects.join('\n')}
+  ${textElements.join('\n')}
+</svg>`;
+
+      // Apply the single SVG overlay
+      image = image.composite([
+        {
+          input: Buffer.from(svgText),
+          top: 0,
+          left: 0,
+        },
+      ]);
     }
 
     // CRITICAL: Generate base image with text baked in BEFORE returning
