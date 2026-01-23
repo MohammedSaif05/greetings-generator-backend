@@ -163,9 +163,8 @@ export class ImageGenerationService {
       fit: 'cover',
     });
 
-    // Collect all font definitions, text elements, filters, and backgrounds
+    // Collect all text elements, filters, and backgrounds
     // We'll build a single SVG overlay with all text areas combined
-    const fontFaceStyles = new Set<string>();
     const textShadowFilters: string[] = [];
     const backgroundRects: string[] = [];
     const textElements: string[] = [];
@@ -223,25 +222,16 @@ export class ImageGenerationService {
             .replace('.ttf', '')
             .replace(/\s+/g, ' ');
 
-          // Load Google Font definition (if configured) so the SVG uses the
-          // correct typeface when rendered by Sharp.
+          // For reliability with Sharp's SVG renderer, we avoid embedding
+          // font binaries directly and instead rely on system / fallback fonts.
+          // The requested family name is still preserved so different templates
+          // can declare different stacks, but Google Fonts are not embedded.
           const fontWeight =
             typedTextArea.fontWeight !== undefined
               ? typedTextArea.fontWeight
               : 400;
 
-          const fontDefinition =
-            await this.googleFontsService.getFontDefinition(
-              requestedFontFamily,
-              fontWeight,
-            );
-
-          // Collect font face style if available
-          if (fontDefinition.styleBlock !== null) {
-            fontFaceStyles.add(fontDefinition.styleBlock);
-          }
-
-          const svgFontFamily = fontDefinition.cssFontFamily;
+          const svgFontFamily = requestedFontFamily;
 
           // Calculate text position based on alignment. We vertically center the
           // whole block of lines within the text area.
@@ -327,14 +317,6 @@ export class ImageGenerationService {
 
     // Build a single SVG overlay with all text areas combined
     if (textElements.length > 0) {
-      const allFontFaces = Array.from(fontFaceStyles).join('\n');
-      const fontFaceStyleBlock =
-        allFontFaces.length > 0
-          ? `<style type="text/css">
-${allFontFaces}
-</style>`
-          : '';
-
       const defsBlock =
         textShadowFilters.length > 0
           ? `<defs>
@@ -343,7 +325,6 @@ ${textShadowFilters.join('\n')}
           : '';
 
       const svgText = `<svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  ${fontFaceStyleBlock}
   ${defsBlock}
   ${backgroundRects.join('\n')}
   ${textElements.join('\n')}
