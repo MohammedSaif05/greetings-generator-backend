@@ -20,8 +20,8 @@ export class GoogleFontsService {
       process.env.GOOGLE_FONTS_API_KEY;
 
     if (!this.apiKey) {
-      this.logger.warn(
-        'GOOGLE_FONTS_API_KEY is not set. Falling back to system fonts; Google Fonts will not be embedded into images.',
+      this.logger.log(
+        'GOOGLE_FONTS_API_KEY is not set. Falling back to public Google Fonts CSS endpoint without API key.',
       );
     }
   }
@@ -30,10 +30,6 @@ export class GoogleFontsService {
    * Returns a font-family name and an optional @font-face style block
    * that can be injected into an SVG so that Sharp renders with the
    * correct Google Font.
-   *
-   * If GOOGLE_FONTS_API_KEY is not configured or any error occurs while
-   * talking to Google, this method falls back to the original family name
-   * and returns null for styleBlock.
    */
   async getFontDefinition(
     fontFamily: string,
@@ -43,17 +39,6 @@ export class GoogleFontsService {
     const cached = this.fontCache.get(cacheKey);
     if (cached) {
       return cached;
-    }
-
-    // If there's no API key we can't use the Web Fonts Developer API;
-    // in that case, just return the original family and rely on system fonts.
-    if (!this.apiKey) {
-      const fallback: FontDefinition = {
-        cssFontFamily: fontFamily,
-        styleBlock: null,
-      };
-      this.fontCache.set(cacheKey, fallback);
-      return fallback;
     }
 
     try {

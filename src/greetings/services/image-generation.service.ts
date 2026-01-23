@@ -133,35 +133,55 @@ export class ImageGenerationService {
     template: TemplateDocument,
     csvRow: CsvRowDto,
   ): Promise<Array<{ width: number; height: number; buffer: Buffer }>> {
-    // Download background image
+    // Decide final output size based on template orientation.
+    // The design coordinates in the template are assumed to be in the
+    // original canvas space (template.canvas.width/height). We scale
+    // everything to the fixed output size per orientation.
+    let targetWidth = template.canvas.width;
+    let targetHeight = template.canvas.height;
+
+    if (template.orientation === 'landscape') {
+      targetWidth = 1200;
+      targetHeight = 675;
+    } else if (template.orientation === 'portrait') {
+      targetWidth = 1080;
+      targetHeight = 1350;
+    } else if (template.orientation === 'square') {
+      targetWidth = 1080;
+      targetHeight = 1080;
+    }
+
+    const scaleX = targetWidth / template.canvas.width;
+    const scaleY = targetHeight / template.canvas.height;
+
+    // Download background image and resize to the target output size
     const backgroundImageBuffer = await this.downloadImage(
       template.backgroundImage.url,
     );
 
-    // Load image with sharp and resize to template canvas size first
-    let image = sharp(backgroundImageBuffer);
-
-    // Get image metadata
-    const metadata = await image.metadata();
-    const originalWidth = metadata.width || template.canvas.width;
-    const originalHeight = metadata.height || template.canvas.height;
-
-    // Resize to template canvas size if needed (do this BEFORE rendering text)
-    if (
-      originalWidth !== template.canvas.width ||
-      originalHeight !== template.canvas.height
-    ) {
-      image = image.resize(template.canvas.width, template.canvas.height, {
-        fit: 'cover',
-      });
-    }
+    let image = sharp(backgroundImageBuffer).resize(targetWidth, targetHeight, {
+      fit: 'cover',
+    });
 
     // Collect all SVG overlays for text areas
     const svgOverlays: Array<{ input: Buffer; top: number; left: number }> = [];
 
     // Build SVG overlays for each text area
     for (const textArea of template.textAreas) {
-      const typedTextArea = textArea as TextArea;
+      const baseArea = textArea as TextArea;
+
+      // Scale the text area to the target output size so that templates
+      // defined at the original canvas resolution still look correct when
+      // rendered at the fixed resolution for their orientation.
+      const typedTextArea: TextArea = {
+        ...baseArea,
+        x: baseArea.x * scaleX,
+        y: baseArea.y * scaleY,
+        width: baseArea.width * scaleX,
+        height: baseArea.height * scaleY,
+        maxFontSize: baseArea.maxFontSize * ((scaleX + scaleY) / 2),
+        minFontSize: baseArea.minFontSize * ((scaleX + scaleY) / 2),
+      };
       const fieldName = this.mapTextAreaToField(typedTextArea.id);
       if (fieldName) {
         const text = csvRow[fieldName];
@@ -284,7 +304,7 @@ ${fontDefinition.styleBlock}
               : '';
 
           // Create SVG with background, optional @font-face, text shadow, and wrapped text
-          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">
+          const svgText = `<svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg">
   ${fontFaceStyle}
   ${textShadowFilter}
   ${backgroundRect}
@@ -322,44 +342,19 @@ ${fontDefinition.styleBlock}
       image = image.composite(svgOverlays);
     }
 
-    // CRITICAL: Generate base image with text baked in BEFORE resizing
+    // CRITICAL: Generate base image with text baked in BEFORE returning
     // This ensures all text is rendered and saved to the buffer
     const baseImageBuffer = await image.png().toBuffer();
 
-    // Generate multiple resolutions of the SAME orientation
-    // A template can only generate images in its own orientation
-    const images: Array<{ width: number; height: number; buffer: Buffer }> = [];
-
-    const baseWidth = template.canvas.width;
-    const baseHeight = template.canvas.height;
-    const aspectRatio = baseWidth / baseHeight;
-
-    // Define standard resolutions for each orientation
-    // All resolutions maintain the template's aspect ratio
-    const resolutions = [
-      { width: baseWidth, height: baseHeight }, // Original size
-      { width: 1600, height: Math.round(1600 / aspectRatio) }, // High res
-      { width: 1920, height: Math.round(1920 / aspectRatio) }, // Full HD
+    // Return a single image that matches the fixed output size based on
+    // the template orientation.
+    return [
+      {
+        width: targetWidth,
+        height: targetHeight,
+        buffer: baseImageBuffer,
+      },
     ];
-
-    // Generate each resolution FROM the baseImageBuffer (which has text baked in)
-    for (const resolution of resolutions) {
-      const resizedBuffer = await sharp(baseImageBuffer)
-        .resize(resolution.width, resolution.height, {
-          fit: 'cover',
-          withoutEnlargement: false,
-        })
-        .png()
-        .toBuffer();
-
-      images.push({
-        width: resolution.width,
-        height: resolution.height,
-        buffer: resizedBuffer,
-      });
-    }
-
-    return images;
   }
 
   async uploadGeneratedImages(
