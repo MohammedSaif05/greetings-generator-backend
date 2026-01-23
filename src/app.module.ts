@@ -9,10 +9,11 @@ import { GreetingsModule } from './greetings/greetings.module';
 
 @Module({
   imports: [
-    // Load environment variables from .env file
+    // Load environment variables from .env file (if exists) or from environment
     ConfigModule.forRoot({
       isGlobal: true, // Make ConfigModule available globally
-      envFilePath: '.env', // Specify the .env file path
+      envFilePath: '.env', // Specify the .env file path (optional, will use env vars if file doesn't exist)
+      ignoreEnvFile: false, // Don't ignore .env file, but also read from process.env
     }),
     // Configure MongoDB connection using ConfigService
     MongooseModule.forRootAsync({

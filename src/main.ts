@@ -17,7 +17,19 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(3000);
+  // Enable CORS for Render deployment
+  app.enableCors({
+    origin: [
+      'https://greetings-generator.onrender.com',
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ],
+    credentials: true,
+  });
+
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  console.log(`🚀 Application is running on: http://localhost:${port}`);
 }
 bootstrap().catch((error) => {
   console.error('Error starting the application:', error);
