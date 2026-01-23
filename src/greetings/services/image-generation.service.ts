@@ -3,7 +3,8 @@ import sharp from 'sharp';
 import { TemplateDocument } from '../../templates/schemas/template.schema';
 import { CsvRowDto } from '../dto/csv-row.dto';
 import { R2Service } from '../../services/r2.service';
-import { LocalFontsService } from '../../services/local-fonts.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface TextAreaMapping {
   recipientName?: string;
@@ -41,10 +42,7 @@ interface TextArea {
 
 @Injectable()
 export class ImageGenerationService {
-  constructor(
-    private readonly r2Service: R2Service,
-    private readonly localFontsService: LocalFontsService,
-  ) {}
+  constructor(private readonly r2Service: R2Service) {}
 
   /**
    * Downloads an image from R2 using the SDK (for internal backend processing).
@@ -89,36 +87,171 @@ export class ImageGenerationService {
   }
 
   /**
-   * Simple word-wrapping helper that breaks text into lines with at most
-   * maxChars characters per line (tries to break on spaces first).
+   * Maps font family names to actual font file paths
    */
-  private wrapText(text: string, maxChars: number): string[] {
-    if (maxChars <= 0) {
-      return [text];
+  private getFontFilePath(
+    fontFamily: string,
+    fontWeight: number = 400,
+  ): string | null {
+    // Clean font family name
+    const cleanName = fontFamily
+      .replace('.ttf', '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Font mapping - maps common font names to actual font files in assets
+    const fontMap: Record<
+      string,
+      { folder: string; getFileName: (weight: number) => string }
+    > = {
+      Poppins: {
+        folder: 'Poppins',
+        getFileName: (weight) => {
+          if (weight <= 300) return 'Poppins-Light.ttf';
+          if (weight <= 400) return 'Poppins-Regular.ttf';
+          if (weight <= 500) return 'Poppins-Medium.ttf';
+          if (weight <= 600) return 'Poppins-SemiBold.ttf';
+          if (weight <= 700) return 'Poppins-Bold.ttf';
+          return 'Poppins-ExtraBold.ttf';
+        },
+      },
+      Jost: {
+        folder: 'Jost',
+        getFileName: (weight) => {
+          if (weight <= 300) return 'Jost-Light.ttf';
+          if (weight <= 400) return 'Jost-Regular.ttf';
+          if (weight <= 500) return 'Jost-Medium.ttf';
+          if (weight <= 600) return 'Jost-SemiBold.ttf';
+          if (weight <= 700) return 'Jost-Bold.ttf';
+          return 'Jost-ExtraBold.ttf';
+        },
+      },
+      Montserrat: {
+        folder: 'Montserrat',
+        getFileName: (weight) => {
+          if (weight <= 300) return 'Montserrat-Light.ttf';
+          if (weight <= 400) return 'Montserrat-Regular.ttf';
+          if (weight <= 500) return 'Montserrat-Medium.ttf';
+          if (weight <= 600) return 'Montserrat-SemiBold.ttf';
+          if (weight <= 700) return 'Montserrat-Bold.ttf';
+          return 'Montserrat-ExtraBold.ttf';
+        },
+      },
+      'IBM Plex Sans': {
+        folder: 'IBM_Plex_Sans',
+        getFileName: (weight) => {
+          if (weight <= 300) return 'IBMPlexSans-Light.ttf';
+          if (weight <= 400) return 'IBMPlexSans-Regular.ttf';
+          if (weight <= 500) return 'IBMPlexSans-Medium.ttf';
+          if (weight <= 600) return 'IBMPlexSans-SemiBold.ttf';
+          if (weight <= 700) return 'IBMPlexSans-Bold.ttf';
+          return 'IBMPlexSans-ExtraBold.ttf';
+        },
+      },
+      Inter: {
+        folder: 'Inter',
+        getFileName: (weight) => {
+          // Use variable font or static based on weight
+          if (weight === 400) return 'Inter-VariableFont_opsz,wght.ttf';
+          return 'Inter-VariableFont_opsz,wght.ttf';
+        },
+      },
+      Roboto: {
+        folder: 'Roboto',
+        getFileName: (weight) => {
+          if (weight === 400) return 'Roboto-VariableFont_wdth,wght.ttf';
+          return 'Roboto-VariableFont_wdth,wght.ttf';
+        },
+      },
+      Lato: {
+        folder: 'Lato',
+        getFileName: (weight) => {
+          if (weight <= 300) return 'Lato-Light.ttf';
+          if (weight <= 400) return 'Lato-Regular.ttf';
+          if (weight <= 700) return 'Lato-Bold.ttf';
+          return 'Lato-Black.ttf';
+        },
+      },
+      'Playfair Display': {
+        folder: 'Playfair_Display',
+        getFileName: (weight) => {
+          if (weight === 400) return 'PlayfairDisplay-VariableFont_wght.ttf';
+          return 'PlayfairDisplay-VariableFont_wght.ttf';
+        },
+      },
+    };
+
+    const fontConfig = fontMap[cleanName];
+    if (!fontConfig) {
+      return null;
     }
 
+    const fontFileName = fontConfig.getFileName(fontWeight);
+    const fontPath = path.join(
+      process.cwd(),
+      'assets',
+      'fonts',
+      fontConfig.folder,
+      fontFileName,
+    );
+
+    // Check if file exists, if not try static folder
+    if (fs.existsSync(fontPath)) {
+      return fontPath;
+    }
+
+    // Try static folder
+    const staticPath = path.join(
+      process.cwd(),
+      'assets',
+      'fonts',
+      fontConfig.folder,
+      'static',
+      fontFileName,
+    );
+
+    if (fs.existsSync(staticPath)) {
+      return staticPath;
+    }
+
+    return null;
+  }
+
+  /**
+   * Loads font file and converts to base64 for embedding in SVG
+   */
+  private loadFontAsBase64(fontPath: string): string {
+    try {
+      const fontBuffer = fs.readFileSync(fontPath);
+      return fontBuffer.toString('base64');
+    } catch (error) {
+      console.warn(`Failed to load font from ${fontPath}:`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Wraps text into lines that fit within the specified width
+   */
+  private wrapText(text: string, maxWidth: number, fontSize: number): string[] {
+    // Simple word wrapping - split by spaces and combine words until width is exceeded
     const words = text.split(/\s+/);
     const lines: string[] = [];
     let currentLine = '';
 
+    // Approximate character width (this is a rough estimate)
+    // For more accurate measurement, you'd need a font metrics library
+    const avgCharWidth = fontSize * 0.6; // Rough estimate: 60% of font size
+
     for (const word of words) {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
-      if (testLine.length <= maxChars) {
+      const estimatedWidth = testLine.length * avgCharWidth;
+
+      if (estimatedWidth <= maxWidth || !currentLine) {
         currentLine = testLine;
       } else {
-        if (currentLine) {
-          lines.push(currentLine);
-        }
-        // If the word itself is longer than maxChars, hard-split it
-        if (word.length > maxChars) {
-          const chunks = word.match(new RegExp(`.{1,${maxChars}}`, 'g')) || [
-            word,
-          ];
-          lines.push(...chunks.slice(0, -1));
-          currentLine = chunks[chunks.length - 1];
-        } else {
-          currentLine = word;
-        }
+        lines.push(currentLine);
+        currentLine = word;
       }
     }
 
@@ -126,149 +259,153 @@ export class ImageGenerationService {
       lines.push(currentLine);
     }
 
-    return lines;
+    return lines.length > 0 ? lines : [text];
+  }
+
+  /**
+   * Calculates optimal font size that fits text within the text area
+   */
+  private calculateOptimalFontSize(
+    text: string,
+    textArea: TextArea,
+    initialFontSize: number,
+  ): { fontSize: number; lines: string[] } {
+    let fontSize = Math.min(initialFontSize, textArea.maxFontSize);
+    fontSize = Math.max(fontSize, textArea.minFontSize);
+
+    const lineHeight = textArea.lineHeight || 1.2;
+    const maxLines = Math.floor(textArea.height / (fontSize * lineHeight));
+
+    // Try to fit text with current font size
+    let lines = this.wrapText(text, textArea.width, fontSize);
+
+    // If text doesn't fit, reduce font size
+    while (lines.length > maxLines && fontSize > textArea.minFontSize) {
+      fontSize = Math.max(fontSize - 2, textArea.minFontSize);
+      lines = this.wrapText(text, textArea.width, fontSize);
+    }
+
+    // If still too many lines, truncate
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      // Truncate last line if needed
+      const lastLine = lines[lines.length - 1];
+      const maxChars = Math.floor(textArea.width / (fontSize * 0.6));
+      if (lastLine.length > maxChars) {
+        lines[lines.length - 1] = lastLine.substring(0, maxChars - 3) + '...';
+      }
+    }
+
+    return { fontSize, lines };
   }
 
   async generateGreetingImage(
     template: TemplateDocument,
     csvRow: CsvRowDto,
   ): Promise<Array<{ width: number; height: number; buffer: Buffer }>> {
-    // Decide final output size based on template orientation.
-    // The design coordinates in the template are assumed to be in the
-    // original canvas space (template.canvas.width/height). We scale
-    // everything to the fixed output size per orientation.
-    let targetWidth = template.canvas.width;
-    let targetHeight = template.canvas.height;
-
-    if (template.orientation === 'landscape') {
-      targetWidth = 1200;
-      targetHeight = 675;
-    } else if (template.orientation === 'portrait') {
-      targetWidth = 1080;
-      targetHeight = 1350;
-    } else if (template.orientation === 'square') {
-      targetWidth = 1080;
-      targetHeight = 1080;
-    }
-
-    const scaleX = targetWidth / template.canvas.width;
-    const scaleY = targetHeight / template.canvas.height;
-
-    // Download background image and resize to the target output size
+    // Download background image
     const backgroundImageBuffer = await this.downloadImage(
       template.backgroundImage.url,
     );
 
-    let image = sharp(backgroundImageBuffer).resize(targetWidth, targetHeight, {
-      fit: 'cover',
-    });
+    // Load image with sharp and resize to template canvas size first
+    let image = sharp(backgroundImageBuffer);
 
-    // Collect all font definitions, text elements, filters, and backgrounds
-    // We'll build a single SVG overlay with all text areas combined
-    const fontFaceStyles = new Set<string>();
-    const textShadowFilters: string[] = [];
-    const backgroundRects: string[] = [];
-    const textElements: string[] = [];
+    // Get image metadata
+    const metadata = await image.metadata();
+    const originalWidth = metadata.width || template.canvas.width;
+    const originalHeight = metadata.height || template.canvas.height;
 
-    // Process each text area and collect all components
+    // Resize to template canvas size if needed (do this BEFORE rendering text)
+    if (
+      originalWidth !== template.canvas.width ||
+      originalHeight !== template.canvas.height
+    ) {
+      image = image.resize(template.canvas.width, template.canvas.height, {
+        fit: 'cover',
+      });
+    }
+
+    // Collect all SVG overlays for text areas
+    const svgOverlays: Array<{ input: Buffer; top: number; left: number }> = [];
+
+    // Build SVG overlays for each text area
     for (const textArea of template.textAreas) {
-      const baseArea = textArea as TextArea;
-
-      // Scale the text area to the target output size so that templates
-      // defined at the original canvas resolution still look correct when
-      // rendered at the fixed resolution for their orientation.
-      const typedTextArea: TextArea = {
-        ...baseArea,
-        x: baseArea.x * scaleX,
-        y: baseArea.y * scaleY,
-        width: baseArea.width * scaleX,
-        height: baseArea.height * scaleY,
-        maxFontSize: baseArea.maxFontSize * ((scaleX + scaleY) / 2),
-        minFontSize: baseArea.minFontSize * ((scaleX + scaleY) / 2),
-      };
+      const typedTextArea = textArea as TextArea;
       const fieldName = this.mapTextAreaToField(typedTextArea.id);
       if (fieldName) {
         const text = csvRow[fieldName];
         if (text && text.trim() !== '') {
-          // Calculate font size that fits within the text area (both width & height)
-          // We approximate average character width as 0.55 * fontSize and adjust
-          // down until the wrapped text fits vertically inside the box.
-          let fontSize = typedTextArea.maxFontSize;
-          let lines: string[] = [];
-          const minFontSize = typedTextArea.minFontSize;
-
-          while (fontSize >= minFontSize) {
-            const avgCharWidth = fontSize * 0.55;
-            const maxCharsPerLine = Math.max(
-              1,
-              Math.floor(typedTextArea.width / avgCharWidth),
-            );
-
-            lines = this.wrapText(text, maxCharsPerLine);
-            const totalHeight =
-              lines.length * fontSize * typedTextArea.lineHeight;
-
-            if (totalHeight <= typedTextArea.height) {
-              break;
-            }
-
-            fontSize -= 2; // decrement and retry
-          }
-
-          if (fontSize < minFontSize) {
-            fontSize = minFontSize;
-          }
-
-          const requestedFontFamily = typedTextArea.fontFamily
-            .replace('.ttf', '')
-            .replace(/\s+/g, ' ');
-
-          // Load local font definition (embeds font file into SVG)
+          // Get font weight
           const fontWeight =
             typedTextArea.fontWeight !== undefined
               ? typedTextArea.fontWeight
               : 400;
 
-          const fontDefinition = this.localFontsService.getFontDefinition(
-            requestedFontFamily,
-            fontWeight,
+          // Calculate optimal font size and wrap text
+          const initialFontSize = Math.min(
+            typedTextArea.maxFontSize,
+            typedTextArea.height * 0.8,
+          );
+          const { fontSize, lines } = this.calculateOptimalFontSize(
+            text,
+            typedTextArea,
+            initialFontSize,
           );
 
-          // Collect font face style if available
-          if (fontDefinition.styleBlock) {
-            fontFaceStyles.add(fontDefinition.styleBlock);
+          // Get font file path and load font
+          const fontFamily = typedTextArea.fontFamily
+            .replace('.ttf', '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          const fontPath = this.getFontFilePath(fontFamily, fontWeight);
+          let fontEmbed = '';
+          let fontFamilyName = fontFamily;
+
+          if (fontPath) {
+            const fontBase64 = this.loadFontAsBase64(fontPath);
+            if (fontBase64) {
+              fontFamilyName = `font-${typedTextArea.id}`;
+              fontEmbed = `
+      <defs>
+        <style>
+          @font-face {
+            font-family: "${fontFamilyName}";
+            src: url("data:font/truetype;charset=utf-8;base64,${fontBase64}") format("truetype");
+            font-weight: ${fontWeight};
+            font-style: normal;
+          }
+        </style>
+      </defs>`;
+            }
           }
 
-          const svgFontFamily = fontDefinition.cssFontFamily;
-
-          // Calculate text position based on alignment. We vertically center the
-          // whole block of lines within the text area.
-          let textX = typedTextArea.x;
-          if (typedTextArea.textAlign === 'center') {
-            textX = typedTextArea.x + typedTextArea.width / 2;
-          } else if (typedTextArea.textAlign === 'right') {
-            textX = typedTextArea.x + typedTextArea.width;
-          }
-
-          const totalTextHeight =
-            lines.length * fontSize * typedTextArea.lineHeight;
-          const firstLineY =
+          // Calculate text position based on alignment
+          const lineHeight = typedTextArea.lineHeight || 1.2;
+          const lineSpacing = fontSize * lineHeight;
+          const totalTextHeight = lines.length * lineSpacing;
+          const startY =
             typedTextArea.y +
             (typedTextArea.height - totalTextHeight) / 2 +
-            fontSize; // baseline of first line
+            fontSize;
 
           // Build text shadow filter if provided
+          let textShadowFilter = '';
           let filterId = '';
           if (typedTextArea.textShadow) {
             filterId = `shadow-${typedTextArea.id}`;
             const shadow = typedTextArea.textShadow;
-            textShadowFilters.push(`
+            textShadowFilter = `
+      <defs>
         <filter id="${filterId}" x="-50%" y="-50%" width="200%" height="200%">
           <feDropShadow dx="${shadow.offsetX}" dy="${shadow.offsetY}" stdDeviation="${shadow.blur}" flood-color="${shadow.color}"/>
-        </filter>`);
+        </filter>
+      </defs>`;
           }
 
           // Build background rectangle if enabled
+          let backgroundRect = '';
           if (
             typedTextArea.background?.enabled &&
             typedTextArea.background.color
@@ -278,89 +415,110 @@ export class ImageGenerationService {
             const bgY = typedTextArea.y - bg.padding;
             const bgWidth = typedTextArea.width + bg.padding * 2;
             const bgHeight = typedTextArea.height + bg.padding * 2;
-            backgroundRects.push(`
-        <rect
-          x="${bgX}"
-          y="${bgY}"
-          width="${bgWidth}"
-          height="${bgHeight}"
-          fill="${bg.color}"
-          rx="${bg.borderRadius}"
-          ry="${bg.borderRadius}"
-        />`);
+            backgroundRect = `
+      <rect
+        x="${bgX}"
+        y="${bgY}"
+        width="${bgWidth}"
+        height="${bgHeight}"
+        fill="${bg.color}"
+        rx="${bg.borderRadius}"
+        ry="${bg.borderRadius}"
+      />`;
           }
 
-          const tspanElements = lines
-            .map((line, index) => {
-              const dy = index === 0 ? 0 : fontSize * typedTextArea.lineHeight;
-              return `<tspan x="${textX}" dy="${dy}">${this.escapeXml(
-                line,
-              )}</tspan>`;
-            })
-            .join('');
-
-          // Build the text element
-          textElements.push(`
-        <text
-          x="${textX}"
-          y="${firstLineY}"
-          font-family="${svgFontFamily}, Arial, sans-serif"
-          font-size="${fontSize}px"
-          font-weight="${fontWeight}"
-          fill="${typedTextArea.fontColor}"
-          text-anchor="${
+          // Build text elements for each line
+          const textAnchor =
             typedTextArea.textAlign === 'center'
               ? 'middle'
               : typedTextArea.textAlign === 'right'
                 ? 'end'
-                : 'start'
-          }"
+                : 'start';
+
+          let textX: number;
+          if (typedTextArea.textAlign === 'center') {
+            textX = typedTextArea.x + typedTextArea.width / 2;
+          } else if (typedTextArea.textAlign === 'right') {
+            textX = typedTextArea.x + typedTextArea.width;
+          } else {
+            textX = typedTextArea.x;
+          }
+
+          const textElements = lines
+            .map((line, index) => {
+              const y = startY + index * lineSpacing;
+              return `
+        <text
+          x="${textX}"
+          y="${y}"
+          font-family="${fontFamilyName}, ${fontFamily}, Arial, sans-serif"
+          font-size="${fontSize}px"
+          font-weight="${fontWeight}"
+          fill="${typedTextArea.fontColor}"
+          text-anchor="${textAnchor}"
+          dominant-baseline="baseline"
           ${filterId ? `filter="url(#${filterId})"` : ''}
-        >
-          ${tspanElements}
-        </text>`);
+        >${this.escapeXml(line)}</text>`;
+            })
+            .join('');
+
+          // Create SVG with font, background, text shadow, and text
+          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${fontEmbed}${textShadowFilter}${backgroundRect}${textElements}
+    </svg>`;
+
+          svgOverlays.push({
+            input: Buffer.from(svgText),
+            top: 0,
+            left: 0,
+          });
         }
       }
     }
 
-    // Build a single SVG overlay with all text areas combined
-    if (textElements.length > 0) {
-      const defsBlock =
-        textShadowFilters.length > 0
-          ? `<defs>
-${textShadowFilters.join('\n')}
-      </defs>`
-          : '';
-
-      const svgText = `<svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  ${defsBlock}
-  ${backgroundRects.join('\n')}
-  ${textElements.join('\n')}
-</svg>`;
-
-      // Apply the single SVG overlay
-      image = image.composite([
-        {
-          input: Buffer.from(svgText),
-          top: 0,
-          left: 0,
-        },
-      ]);
+    // Apply all text overlays at once using composite
+    // This ensures text is baked into the image before any resizing
+    if (svgOverlays.length > 0) {
+      image = image.composite(svgOverlays);
     }
 
-    // CRITICAL: Generate base image with text baked in BEFORE returning
+    // CRITICAL: Generate base image with text baked in BEFORE resizing
     // This ensures all text is rendered and saved to the buffer
     const baseImageBuffer = await image.png().toBuffer();
 
-    // Return a single image that matches the fixed output size based on
-    // the template orientation.
-    return [
-      {
-        width: targetWidth,
-        height: targetHeight,
-        buffer: baseImageBuffer,
-      },
+    // Generate multiple resolutions of the SAME orientation
+    // A template can only generate images in its own orientation
+    const images: Array<{ width: number; height: number; buffer: Buffer }> = [];
+
+    const baseWidth = template.canvas.width;
+    const baseHeight = template.canvas.height;
+    const aspectRatio = baseWidth / baseHeight;
+
+    // Define standard resolutions for each orientation
+    // All resolutions maintain the template's aspect ratio
+    const resolutions = [
+      { width: baseWidth, height: baseHeight }, // Original size
+      { width: 1600, height: Math.round(1600 / aspectRatio) }, // High res
+      { width: 1920, height: Math.round(1920 / aspectRatio) }, // Full HD
     ];
+
+    // Generate each resolution FROM the baseImageBuffer (which has text baked in)
+    for (const resolution of resolutions) {
+      const resizedBuffer = await sharp(baseImageBuffer)
+        .resize(resolution.width, resolution.height, {
+          fit: 'cover',
+          withoutEnlargement: false,
+        })
+        .png()
+        .toBuffer();
+
+      images.push({
+        width: resolution.width,
+        height: resolution.height,
+        buffer: resizedBuffer,
+      });
+    }
+
+    return images;
   }
 
   async uploadGeneratedImages(

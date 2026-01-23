@@ -7,7 +7,6 @@ import { Template, TemplateSchema } from '../templates/schemas/template.schema';
 import { CsvParserService } from './services/csv-parser.service';
 import { ImageGenerationService } from './services/image-generation.service';
 import { R2Service } from '../services/r2.service';
-import { LocalFontsService } from '../services/local-fonts.service';
 
 @Module({
   imports: [
@@ -22,7 +21,6 @@ import { LocalFontsService } from '../services/local-fonts.service';
     CsvParserService,
     ImageGenerationService,
     R2Service,
-    LocalFontsService,
   ],
 })
 export class GreetingsModule {}
