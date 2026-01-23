@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import { TemplateDocument } from '../../templates/schemas/template.schema';
 import { CsvRowDto } from '../dto/csv-row.dto';
 import { R2Service } from '../../services/r2.service';
-import { GoogleFontsService } from '../../services/google-fonts.service';
+import { LocalFontsService } from '../../services/local-fonts.service';
 
 interface TextAreaMapping {
   recipientName?: string;
@@ -43,7 +43,7 @@ interface TextArea {
 export class ImageGenerationService {
   constructor(
     private readonly r2Service: R2Service,
-    private readonly googleFontsService: GoogleFontsService,
+    private readonly localFontsService: LocalFontsService,
   ) {}
 
   /**
@@ -163,8 +163,9 @@ export class ImageGenerationService {
       fit: 'cover',
     });
 
-    // Collect all text elements, filters, and backgrounds
+    // Collect all font definitions, text elements, filters, and backgrounds
     // We'll build a single SVG overlay with all text areas combined
+    const fontFaceStyles = new Set<string>();
     const textShadowFilters: string[] = [];
     const backgroundRects: string[] = [];
     const textElements: string[] = [];
@@ -222,16 +223,23 @@ export class ImageGenerationService {
             .replace('.ttf', '')
             .replace(/\s+/g, ' ');
 
-          // For reliability with Sharp's SVG renderer, we avoid embedding
-          // font binaries directly and instead rely on system / fallback fonts.
-          // The requested family name is still preserved so different templates
-          // can declare different stacks, but Google Fonts are not embedded.
+          // Load local font definition (embeds font file into SVG)
           const fontWeight =
             typedTextArea.fontWeight !== undefined
               ? typedTextArea.fontWeight
               : 400;
 
-          const svgFontFamily = requestedFontFamily;
+          const fontDefinition = this.localFontsService.getFontDefinition(
+            requestedFontFamily,
+            fontWeight,
+          );
+
+          // Collect font face style if available
+          if (fontDefinition.styleBlock) {
+            fontFaceStyles.add(fontDefinition.styleBlock);
+          }
+
+          const svgFontFamily = fontDefinition.cssFontFamily;
 
           // Calculate text position based on alignment. We vertically center the
           // whole block of lines within the text area.
