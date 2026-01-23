@@ -302,7 +302,7 @@ export class ImageGenerationService {
   async generateGreetingImage(
     template: TemplateDocument,
     csvRow: CsvRowDto,
-  ): Promise<Array<{ width: number; height: number; buffer: Buffer }>> {
+  ): Promise<{ width: number; height: number; buffer: Buffer }> {
     // Download background image
     const backgroundImageBuffer = await this.downloadImage(
       template.backgroundImage.url,
@@ -485,58 +485,58 @@ export class ImageGenerationService {
     // This ensures all text is rendered and saved to the buffer
     const baseImageBuffer = await image.png().toBuffer();
 
-    // Generate multiple resolutions of the SAME orientation
-    // A template can only generate images in its own orientation
-    const images: Array<{ width: number; height: number; buffer: Buffer }> = [];
+    // Determine target resolution based on template orientation
+    let targetWidth: number;
+    let targetHeight: number;
 
-    const baseWidth = template.canvas.width;
-    const baseHeight = template.canvas.height;
-    const aspectRatio = baseWidth / baseHeight;
-
-    // Define standard resolutions for each orientation
-    // All resolutions maintain the template's aspect ratio
-    const resolutions = [
-      { width: baseWidth, height: baseHeight }, // Original size
-      { width: 1600, height: Math.round(1600 / aspectRatio) }, // High res
-      { width: 1920, height: Math.round(1920 / aspectRatio) }, // Full HD
-    ];
-
-    // Generate each resolution FROM the baseImageBuffer (which has text baked in)
-    for (const resolution of resolutions) {
-      const resizedBuffer = await sharp(baseImageBuffer)
-        .resize(resolution.width, resolution.height, {
-          fit: 'cover',
-          withoutEnlargement: false,
-        })
-        .png()
-        .toBuffer();
-
-      images.push({
-        width: resolution.width,
-        height: resolution.height,
-        buffer: resizedBuffer,
-      });
+    switch (template.orientation) {
+      case 'landscape':
+        targetWidth = 1200;
+        targetHeight = 675;
+        break;
+      case 'portrait':
+        targetWidth = 1080;
+        targetHeight = 1350;
+        break;
+      case 'square':
+        targetWidth = 1080;
+        targetHeight = 1080;
+        break;
+      default:
+        // Fallback to template canvas size if orientation is unknown
+        targetWidth = template.canvas.width;
+        targetHeight = template.canvas.height;
     }
 
-    return images;
+    // Resize to target resolution
+    const resizedBuffer = await sharp(baseImageBuffer)
+      .resize(targetWidth, targetHeight, {
+        fit: 'cover',
+        withoutEnlargement: false,
+      })
+      .png()
+      .toBuffer();
+
+    // Return single image based on orientation
+    return {
+      width: targetWidth,
+      height: targetHeight,
+      buffer: resizedBuffer,
+    };
   }
 
-  async uploadGeneratedImages(
-    images: Array<{ width: number; height: number; buffer: Buffer }>,
+  async uploadGeneratedImage(
+    image: { width: number; height: number; buffer: Buffer },
     rowNumber: number,
     templateId: string,
-  ): Promise<Array<{ width: number; height: number; url: string }>> {
-    const uploadPromises = images.map(async (image) => {
-      const fileName = `greetings/${templateId}_${rowNumber}_${image.width}x${image.height}.png`;
-      const url = await this.uploadImage(image.buffer, fileName);
-      return {
-        width: image.width,
-        height: image.height,
-        url,
-      };
-    });
-
-    return Promise.all(uploadPromises);
+  ): Promise<{ width: number; height: number; url: string }> {
+    const fileName = `greetings/${templateId}_${rowNumber}_${image.width}x${image.height}.png`;
+    const url = await this.uploadImage(image.buffer, fileName);
+    return {
+      width: image.width,
+      height: image.height,
+      url,
+    };
   }
 
   private async uploadImage(buffer: Buffer, fileName: string): Promise<string> {

@@ -82,16 +82,16 @@ export class GreetingsService {
           throw new Error(`Template "${csvRow.templateId}" not found`);
         }
 
-        // Generate images
-        const images = await this.imageGenerationService.generateGreetingImage(
+        // Generate image
+        const image = await this.imageGenerationService.generateGreetingImage(
           template,
           csvRow,
         );
 
-        // Upload images
-        const imageUrls =
-          await this.imageGenerationService.uploadGeneratedImages(
-            images,
+        // Upload image
+        const imageUrl =
+          await this.imageGenerationService.uploadGeneratedImage(
+            image,
             rowNumber,
             csvRow.templateId,
           );
@@ -103,13 +103,13 @@ export class GreetingsService {
           occasion: csvRow.occasion,
           message: csvRow.message,
           senderName: csvRow.senderName,
-          imageUrls: imageUrls.map(
-            (img: { width: number; height: number; url: string }) => ({
-              width: img.width,
-              height: img.height,
-              url: img.url,
-            }),
-          ),
+          imageUrls: [
+            {
+              width: imageUrl.width,
+              height: imageUrl.height,
+              url: imageUrl.url,
+            },
+          ],
           rowNumber,
         };
         const greeting = new this.greetingModel(greetingData);
@@ -118,7 +118,7 @@ export class GreetingsService {
         results.push({
           row: rowNumber,
           templateId: csvRow.templateId,
-          images: imageUrls,
+          image: imageUrl,
         });
 
         generatedCount++;

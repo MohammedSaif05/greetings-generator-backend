@@ -7,7 +7,7 @@ export class GeneratedImage {
 export class GreetingResult {
   row: number;
   templateId: string;
-  images: GeneratedImage[];
+  image: GeneratedImage;
 }
 
 export class BulkGreetingResponseDto {
