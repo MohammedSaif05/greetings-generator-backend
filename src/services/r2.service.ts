@@ -27,6 +27,64 @@ export class R2Service {
     });
   }
 
+  /**
+   * Normalizes a URL to use the public URL format if publicUrl is configured.
+   * Converts storage URLs (https://account.r2.cloudflarestorage.com/...)
+   * or signed URLs to public URLs (https://pub-xxxxx.r2.dev/...)
+   *
+   * @param url - The URL to normalize (can be storage URL, signed URL, or public URL)
+   * @returns Public URL if publicUrl is configured, otherwise returns original URL
+   */
+  normalizeToPublicUrl(url: string): string {
+    if (!this.config.publicUrl) {
+      // If publicUrl is not configured, return original URL
+      return url;
+    }
+
+    try {
+      const urlObj = new URL(url);
+
+      // If it's already a public URL, return as is
+      if (urlObj.hostname === new URL(this.config.publicUrl).hostname) {
+        return url;
+      }
+
+      // Extract the key from the URL
+      let key: string;
+
+      // Handle storage URLs: https://account.r2.cloudflarestorage.com/bucket/key
+      if (urlObj.hostname.includes('.r2.cloudflarestorage.com')) {
+        let pathname = urlObj.pathname;
+        // Remove bucket name from path if present
+        if (pathname.startsWith(`/${this.config.bucketName}/`)) {
+          pathname = pathname.substring(`/${this.config.bucketName}/`.length);
+        } else if (pathname.startsWith('/')) {
+          pathname = pathname.substring(1);
+        }
+        key = pathname;
+      } else {
+        // For signed URLs or other formats, extract key from pathname
+        let pathname = urlObj.pathname;
+        if (pathname.startsWith(`/${this.config.bucketName}/`)) {
+          pathname = pathname.substring(`/${this.config.bucketName}/`.length);
+        } else if (pathname.startsWith('/')) {
+          pathname = pathname.substring(1);
+        }
+        key = pathname;
+      }
+
+      if (!key) {
+        return url; // Return original if we can't extract key
+      }
+
+      // Return public URL format
+      return `${this.config.publicUrl}/${key}`;
+    } catch {
+      // If URL parsing fails, return original
+      return url;
+    }
+  }
+
   async uploadFile(
     file: Express.Multer.File,
     folder: string = 'templates',
@@ -58,7 +116,7 @@ export class R2Service {
 
     await this.s3Client.send(command);
 
-    // Generate public URL or signed URL
+    // Always use public URL format if configured, otherwise use signed URL
     let imageUrl: string;
     if (this.config.publicUrl) {
       imageUrl = `${this.config.publicUrl}/${fileName}`;
@@ -75,7 +133,7 @@ export class R2Service {
 
     return {
       assetId,
-      imageUrl,
+      imageUrl: this.normalizeToPublicUrl(imageUrl),
     };
   }
 
@@ -93,7 +151,7 @@ export class R2Service {
 
     await this.s3Client.send(command);
 
-    // Generate public URL or signed URL
+    // Always use public URL format if configured, otherwise use signed URL
     let imageUrl: string;
     if (this.config.publicUrl) {
       imageUrl = `${this.config.publicUrl}/${fileName}`;
@@ -108,7 +166,7 @@ export class R2Service {
       });
     }
 
-    return imageUrl;
+    return this.normalizeToPublicUrl(imageUrl);
   }
 
   /**
@@ -201,18 +259,20 @@ export class R2Service {
     key: string,
     expiresIn: number = 31536000,
   ): Promise<string> {
+    let imageUrl: string;
     if (this.config.publicUrl) {
-      return `${this.config.publicUrl}/${key}`;
+      imageUrl = `${this.config.publicUrl}/${key}`;
     } else {
       // Generate a signed URL
       const signedUrlCommand = new GetObjectCommand({
         Bucket: this.config.bucketName,
         Key: key,
       });
-      return await getSignedUrl(this.s3Client, signedUrlCommand, {
+      imageUrl = await getSignedUrl(this.s3Client, signedUrlCommand, {
         expiresIn,
       });
     }
+    return this.normalizeToPublicUrl(imageUrl);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

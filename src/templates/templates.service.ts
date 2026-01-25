@@ -117,9 +117,18 @@ export class TemplatesService {
       }
     }
 
+    // Normalize background image URL to public URL format
+    const normalizedBackgroundImage = {
+      ...createTemplateDto.backgroundImage,
+      url: this.r2Service.normalizeToPublicUrl(
+        createTemplateDto.backgroundImage.url,
+      ),
+    };
+
     // Create and save template
     const template = new this.templateModel({
       ...createTemplateDto,
+      backgroundImage: normalizedBackgroundImage,
       status: 'ACTIVE',
     });
 
