@@ -33,13 +33,13 @@ multipart/form-data
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file` | File | Yes | CSV file containing greeting data |
+| `templateId` | string | Yes | Template identifier to use for all greeting generations |
 
 ### CSV File Requirements
 
 **File Type:** `.csv`  
 **Maximum Size:** 50MB  
 **Required Headers:** Must include exactly these columns (case-sensitive):
-- `templateId`
 - `recipientName`
 - `occasion`
 - `message`
@@ -50,24 +50,23 @@ multipart/form-data
 The CSV file must follow this exact schema:
 
 ```csv
-templateId,recipientName,occasion,message,senderName
-sample_01,John Doe,Birthday,Wishing you success,DXSO Team
-sample_01,Jane Smith,Anniversary,Congratulations on your special day,Marketing Team
-birthday_card_01,Alice Johnson,Birthday,Happy Birthday! Hope your day is filled with joy,HR Department
+recipientName,occasion,message,senderName
+John Doe,Birthday,Wishing you success,DXSO Team
+Jane Smith,Anniversary,Congratulations on your special day,Marketing Team
+Alice Johnson,Birthday,Happy Birthday! Hope your day is filled with joy,HR Department
 ```
 
 **Example CSV Content:**
 ```csv
-templateId,recipientName,occasion,message,senderName
-sample_01,John Doe,Birthday,Wishing you success,DXSO Team
-sample_01,Jane Smith,Anniversary,Congratulations on your special day,Marketing Team
+recipientName,occasion,message,senderName
+John Doe,Birthday,Wishing you success,DXSO Team
+Jane Smith,Anniversary,Congratulations on your special day,Marketing Team
 ```
 
 ### Field Descriptions
 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
-| `templateId` | string | Yes | Must exist in database, status must be ACTIVE | Template identifier to use for generation |
 | `recipientName` | string | Yes | Not empty | Name of the person receiving the greeting |
 | `occasion` | string | Yes | Not empty | Type of occasion (e.g., Birthday, Anniversary) |
 | `message` | string | Yes | Not empty, max 300 characters | Personalized message text |
@@ -305,13 +304,11 @@ For each row in the CSV:
 - Headers are validated
 - Each row is validated for required fields
 
-### Step 3: Group by Template ID (Optimization)
-- Rows are grouped by `templateId` to optimize database queries
-- Each unique template is loaded only once from MongoDB
+### Step 3: Load Template
+- The specified template is loaded from MongoDB using the provided templateId
 
-### Step 4: Validate Templates
-- All unique templates are fetched from the database
-- Each template is validated:
+### Step 4: Validate Template
+- The specified template is validated:
   - Template exists
   - Template status is `ACTIVE`
 
@@ -404,7 +401,7 @@ The API uses **exact match** mapping between text area IDs and CSV column names:
 
 **CSV Columns:**
 ```csv
-templateId,recipientName,occasion,message,senderName
+recipientName,occasion,message,senderName
 ```
 
 **Result:**
@@ -549,7 +546,8 @@ Each successfully processed greeting is stored in MongoDB with the following str
 
 ```bash
 curl -X POST http://localhost:3000/api/greetings/bulk \
-  -F "file=@greetings.csv"
+  -F "file=@greetings.csv" \
+  -F "templateId=sample_01"
 ```
 
 ### Example 2: JavaScript/TypeScript (FormData)
@@ -557,6 +555,7 @@ curl -X POST http://localhost:3000/api/greetings/bulk \
 ```javascript
 const formData = new FormData();
 formData.append('file', fileInput.files[0]);
+formData.append('templateId', 'sample_01');
 
 const response = await fetch('http://localhost:3000/api/greetings/bulk', {
   method: 'POST',
@@ -576,6 +575,7 @@ const axios = require('axios');
 
 const formData = new FormData();
 formData.append('file', fs.createReadStream('greetings.csv'));
+formData.append('templateId', 'sample_01');
 
 const response = await axios.post(
   'http://localhost:3000/api/greetings/bulk',
@@ -597,8 +597,9 @@ url = 'http://localhost:3000/api/greetings/bulk'
 
 with open('greetings.csv', 'rb') as f:
     files = {'file': ('greetings.csv', f, 'text/csv')}
-    response = requests.post(url, files=files)
-    
+    data = {'templateId': 'sample_01'}
+    response = requests.post(url, files=files, data=data)
+
 print(response.json())
 ```
 
@@ -607,11 +608,11 @@ print(response.json())
 Create a file named `greetings.csv`:
 
 ```csv
-templateId,recipientName,occasion,message,senderName
-sample_01,John Doe,Birthday,Wishing you a wonderful birthday filled with joy and happiness,DXSO Team
-sample_01,Jane Smith,Anniversary,Congratulations on your special anniversary. May you have many more years of happiness together,Marketing Team
-birthday_card_01,Alice Johnson,Birthday,Happy Birthday! Hope your day is filled with joy and laughter,HR Department
-sample_01,Bob Williams,Graduation,Congratulations on your graduation! Wishing you success in all your future endeavors,Academic Team
+recipientName,occasion,message,senderName
+John Doe,Birthday,Wishing you a wonderful birthday filled with joy and happiness,DXSO Team
+Jane Smith,Anniversary,Congratulations on your special anniversary. May you have many more years of happiness together,Marketing Team
+Alice Johnson,Birthday,Happy Birthday! Hope your day is filled with joy and laughter,HR Department
+Bob Williams,Graduation,Congratulations on your graduation! Wishing you success in all your future endeavors,Academic Team
 ```
 
 ---
