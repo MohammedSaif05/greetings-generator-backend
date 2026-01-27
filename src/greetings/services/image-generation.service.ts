@@ -509,6 +509,7 @@ export class ImageGenerationService {
       .png()
       .toBuffer();
     const baseBackgroundBase64 = baseBackground.toString('base64');
+    const fontsDir = this.getFontsDir();
 
     // Collect text elements and font/filter defs once; we'll render everything in a single SVG
     const svgTextElements: string[] = [];
@@ -657,7 +658,7 @@ export class ImageGenerationService {
         <text
           x="${textX}"
           y="${y}"
-          font-family="${fontFamilyName}, ${fontFamily}, Arial, sans-serif"
+          font-family="${fontFamily}, Arial, sans-serif"
           font-size="${fontSize}px"
           font-weight="${fontWeight}"
           font-style="${fontStyle}"
@@ -718,6 +719,12 @@ export class ImageGenerationService {
     const resvg = new Resvg(svg, {
       fitTo: {
         mode: 'original',
+      },
+      font: {
+        // Load fonts from our assets/fonts directory so families like
+        // "Alex Brush" are available to the renderer.
+        loadSystemFonts: true,
+        fontDirs: [fontsDir],
       },
     });
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
