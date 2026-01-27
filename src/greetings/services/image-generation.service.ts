@@ -51,6 +51,18 @@ export class ImageGenerationService {
   constructor(private readonly r2Service: R2Service) {}
 
   /**
+   * Resolve project root reliably (works from both src/ and dist/).
+   * Avoid depending on process.cwd(), which can vary in production.
+   */
+  private getProjectRoot(): string {
+    return path.resolve(__dirname, '..', '..', '..', '..');
+  }
+
+  private getFontsDir(): string {
+    return path.join(this.getProjectRoot(), 'assets', 'fonts');
+  }
+
+  /**
    * Downloads an image from R2 using the SDK (for internal backend processing).
    * This method uses the R2 SDK instead of public URLs for backend operations.
    *
@@ -99,6 +111,8 @@ export class ImageGenerationService {
     fontFamily: string,
     fontWeight: number = 400,
   ): string | null {
+    const fontsDir = this.getFontsDir();
+
     // First: allow direct file names under assets/fonts
     // Examples that will work:
     // - "AlexBrush-Regular.ttf"
@@ -112,7 +126,7 @@ export class ImageGenerationService {
         : `${fontFamilyBase}.ttf`,
     ];
     for (const candidate of directCandidates) {
-      const directPath = path.join(process.cwd(), 'assets', 'fonts', candidate);
+      const directPath = path.join(fontsDir, candidate);
       if (fs.existsSync(directPath)) {
         return directPath;
       }
@@ -134,12 +148,7 @@ export class ImageGenerationService {
       `${collapsedName}regular.ttf`,
     ];
     for (const candidate of derivedCandidates) {
-      const derivedPath = path.join(
-        process.cwd(),
-        'assets',
-        'fonts',
-        candidate,
-      );
+      const derivedPath = path.join(fontsDir, candidate);
       if (fs.existsSync(derivedPath)) {
         return derivedPath;
       }
@@ -355,13 +364,7 @@ export class ImageGenerationService {
     }
 
     const fontFileName = fontConfig.getFileName(fontWeight);
-    const fontPath = path.join(
-      process.cwd(),
-      'assets',
-      'fonts',
-      fontConfig.folder,
-      fontFileName,
-    );
+    const fontPath = path.join(fontsDir, fontConfig.folder, fontFileName);
 
     // Check if file exists, if not try static folder
     if (fs.existsSync(fontPath)) {
@@ -370,9 +373,7 @@ export class ImageGenerationService {
 
     // Try static folder
     const staticPath = path.join(
-      process.cwd(),
-      'assets',
-      'fonts',
+      fontsDir,
       fontConfig.folder,
       'static',
       fontFileName,
@@ -543,14 +544,27 @@ export class ImageGenerationService {
         <style>
           @font-face {
             font-family: "${fontFamilyName}";
-            /* Use a widely-supported data URL for Sharp/librsvg */
-            src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+            /*
+             * Sharp renders SVG via librsvg. It is picky about font MIME types;
+             * application/x-font-ttf is widely accepted, and we keep a fallback.
+             */
+            src:
+              url("data:application/x-font-ttf;base64,${fontBase64}") format("truetype"),
+              url("data:font/truetype;base64,${fontBase64}") format("truetype");
             font-weight: ${fontWeight};
             font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
           }
         </style>
       </defs>`;
+            } else {
+              console.warn(
+                `[fonts] Failed to base64-load font at: ${fontPath} (falling back to system fonts)`,
+              );
             }
+          } else {
+            console.warn(
+              `[fonts] Font file not found for family "${fontFamily}" (weight ${fontWeight}). Ensure it exists under ${this.getFontsDir()}.`,
+            );
           }
 
           // Calculate text position based on alignment
@@ -632,7 +646,7 @@ export class ImageGenerationService {
         <text
           x="${textX}"
           y="${y}"
-          font-family="${fontFamilyName}, ${fontFamily}, Arial, sans-serif"
+          font-family="${fontFamilyName}", "${fontFamily}", Arial, sans-serif
           font-size="${fontSize}px"
           font-weight="${fontWeight}"
           font-style="${fontStyle}"
