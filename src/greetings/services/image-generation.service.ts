@@ -55,7 +55,30 @@ export class ImageGenerationService {
    * Avoid depending on process.cwd(), which can vary in production.
    */
   private getProjectRoot(): string {
-    return path.resolve(__dirname, '..', '..', '..', '..');
+    // We may be running from:
+    // - compiled JS in dist/greetings/services/...
+    // - TypeScript in src/greetings/services/... (e.g. in local dev tools)
+    //
+    // To make this robust, probe a few likely roots and pick the first one
+    // that actually contains our assets/fonts directory.
+    const candidateRoots = [
+      // dist build: dist/greetings/services -> dist -> project root
+      path.resolve(__dirname, '..', '..', '..'),
+      // source tree: src/greetings/services -> src -> project root
+      path.resolve(__dirname, '..', '..', '..', '..'),
+      // fallback to current working directory (useful in some tooling)
+      process.cwd(),
+    ];
+
+    for (const root of candidateRoots) {
+      const fontsDir = path.join(root, 'assets', 'fonts');
+      if (fs.existsSync(fontsDir)) {
+        return root;
+      }
+    }
+
+    // Absolute fallback: behave like the dist case.
+    return path.resolve(__dirname, '..', '..', '..');
   }
 
   private getFontsDir(): string {
