@@ -99,6 +99,25 @@ export class ImageGenerationService {
     fontFamily: string,
     fontWeight: number = 400,
   ): string | null {
+    // First: allow direct file names under assets/fonts
+    // Examples that will work:
+    // - "AlexBrush-Regular.ttf"
+    // - "AlexBrush-Regular"
+    // - "assets/fonts/AlexBrush-Regular.ttf" (we'll extract basename)
+    const fontFamilyBase = path.basename(fontFamily);
+    const directCandidates = [
+      fontFamilyBase,
+      fontFamilyBase.endsWith('.ttf')
+        ? fontFamilyBase
+        : `${fontFamilyBase}.ttf`,
+    ];
+    for (const candidate of directCandidates) {
+      const directPath = path.join(process.cwd(), 'assets', 'fonts', candidate);
+      if (fs.existsSync(directPath)) {
+        return directPath;
+      }
+    }
+
     // Clean font family name
     const cleanName = fontFamily
       .replace('.ttf', '')
@@ -503,9 +522,10 @@ export class ImageGenerationService {
         <style>
           @font-face {
             font-family: "${fontFamilyName}";
-            src: url("data:font/truetype;charset=utf-8;base64,${fontBase64}") format("truetype");
+            /* Use a widely-supported data URL for Sharp/librsvg */
+            src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
             font-weight: ${fontWeight};
-            font-style: normal;
+            font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
           }
         </style>
       </defs>`;
