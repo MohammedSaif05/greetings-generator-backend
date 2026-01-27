@@ -124,6 +124,27 @@ export class ImageGenerationService {
       .replace(/\s+/g, ' ')
       .trim();
 
+    // Second: if payload sends a human name like "Alex Brush"
+    // but the file is stored as "AlexBrush-Regular.ttf", auto-resolve it.
+    const collapsedName = cleanName.replace(/\s+/g, '');
+    const derivedCandidates = [
+      `${collapsedName}-Regular.ttf`,
+      `${collapsedName}-regular.ttf`,
+      `${collapsedName}Regular.ttf`,
+      `${collapsedName}regular.ttf`,
+    ];
+    for (const candidate of derivedCandidates) {
+      const derivedPath = path.join(
+        process.cwd(),
+        'assets',
+        'fonts',
+        candidate,
+      );
+      if (fs.existsSync(derivedPath)) {
+        return derivedPath;
+      }
+    }
+
     // Font mapping - maps common font names to actual font files in assets/fonts
     const fontMap: Record<
       string,
