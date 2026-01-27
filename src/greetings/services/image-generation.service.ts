@@ -510,9 +510,10 @@ export class ImageGenerationService {
       .toBuffer();
     const baseBackgroundBase64 = baseBackground.toString('base64');
 
-    // Collect text elements and defs once; we'll render everything in a single SVG
+    // Collect text elements and font/filter defs once; we'll render everything in a single SVG
     const svgTextElements: string[] = [];
-    const svgDefs: string[] = [];
+    const fontFaceRules: string[] = [];
+    const filterDefs: string[] = [];
 
     // Build SVG fragments for each text area
     for (const textArea of template.textAreas) {
@@ -555,19 +556,17 @@ export class ImageGenerationService {
             const fontBase64 = this.loadFontAsBase64(fontPath);
             if (fontBase64) {
               fontFamilyName = `font-${typedTextArea.id}`;
-              // NOTE: Do NOT wrap this in its own <defs>. We aggregate all
-              // defs into a single <defs> block later when building the final SVG.
+              // NOTE: We return only the @font-face rule here; all rules will be
+              // wrapped in a single <style> block at the root SVG level.
               fontEmbed = `
-      <style>
-        @font-face {
-          font-family: "${fontFamilyName}";
-          src:
-            url("data:application/x-font-ttf;base64,${fontBase64}") format("truetype"),
-            url("data:font/truetype;base64,${fontBase64}") format("truetype");
-          font-weight: ${fontWeight};
-          font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
-        }
-      </style>`;
+@font-face {
+  font-family: "${fontFamilyName}";
+  src:
+    url("data:application/x-font-ttf;base64,${fontBase64}") format("truetype"),
+    url("data:font/truetype;base64,${fontBase64}") format("truetype");
+  font-weight: ${fontWeight};
+  font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
+}`;
             } else {
               console.warn(
                 `[fonts] Failed to base64-load font at: ${fontPath} (falling back to system fonts)`,
@@ -683,12 +682,12 @@ export class ImageGenerationService {
           const rotatedGroupEnd = rotation !== 0 ? `</g>` : '';
 
           // Create SVG with font, background, text shadow, and text
-          // Collect defs (font + shadow) and text/background elements
+          // Collect font rules, filter defs, and text/background elements
           if (fontEmbed) {
-            svgDefs.push(fontEmbed);
+            fontFaceRules.push(fontEmbed);
           }
           if (textShadowFilter) {
-            svgDefs.push(textShadowFilter);
+            filterDefs.push(textShadowFilter);
           }
           if (backgroundRect) {
             svgTextElements.push(backgroundRect);
@@ -702,8 +701,11 @@ export class ImageGenerationService {
 
     // Build a single SVG that includes the background image and all text
     const svg = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <style>
+    ${fontFaceRules.join('\n')}
+  </style>
   <defs>
-    ${svgDefs.join('\n')}
+    ${filterDefs.join('\n')}
   </defs>
   <image href="data:image/png;base64,${baseBackgroundBase64}" x="0" y="0" width="${template.canvas.width}" height="${template.canvas.height}" />
   ${svgTextElements.join('\n')}
