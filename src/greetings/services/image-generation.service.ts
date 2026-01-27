@@ -99,7 +99,7 @@ export class ImageGenerationService {
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Font mapping - maps common font names to actual font files in assets
+    // Font mapping - maps common font names to actual font files in assets/fonts
     const fontMap: Record<
       string,
       { folder: string; getFileName: (weight: number) => string }
@@ -178,6 +178,128 @@ export class ImageGenerationService {
           if (weight === 400) return 'PlayfairDisplay-VariableFont_wght.ttf';
           return 'PlayfairDisplay-VariableFont_wght.ttf';
         },
+      },
+
+      // Handwritten / script fonts (single-regular weights)
+      'Alex Brush': {
+        folder: '',
+        getFileName: () => 'AlexBrush-Regular.ttf',
+      },
+      Allura: {
+        folder: '',
+        getFileName: () => 'Allura-Regular.ttf',
+      },
+      Caveat: {
+        folder: '',
+        getFileName: () => 'Caveat-Regular.ttf',
+      },
+      'Cedarville Cursive': {
+        folder: '',
+        getFileName: () => 'CedarvilleCursive-Regular.ttf',
+      },
+      'Dancing Script': {
+        folder: '',
+        getFileName: () => 'DancingScript-Regular.ttf',
+      },
+      'Euphoria Script': {
+        folder: '',
+        getFileName: () => 'EuphoriaScript-Regular.ttf',
+      },
+      Festive: {
+        folder: '',
+        getFileName: () => 'Festive-Regular.ttf',
+      },
+      'Grand Hotel': {
+        folder: '',
+        getFileName: () => 'GrandHotel-Regular.ttf',
+      },
+      'Great Vibes': {
+        folder: '',
+        getFileName: () => 'GreatVibes-Regular.ttf',
+      },
+      'Indie Flower': {
+        folder: '',
+        getFileName: () => 'IndieFlower-Regular.ttf',
+      },
+      'Ingrid Darling': {
+        folder: '',
+        getFileName: () => 'IngridDarling-Regular.ttf',
+      },
+      Italianno: {
+        folder: '',
+        getFileName: () => 'Italianno-Regular.ttf',
+      },
+      'Just Another Hand': {
+        folder: '',
+        getFileName: () => 'JustAnotherHand-Regular.ttf',
+      },
+      'Kaushan Script': {
+        folder: '',
+        getFileName: () => 'KaushanScript-Regular.ttf',
+      },
+      Lobster: {
+        folder: '',
+        getFileName: () => 'Lobster-Regular.ttf',
+      },
+      'Lovers Quarrel': {
+        folder: '',
+        getFileName: () => 'LoversQuarrel-Regular.ttf',
+      },
+      'Marck Script': {
+        folder: '',
+        getFileName: () => 'MarckScript-Regular.ttf',
+      },
+      'Mea Culpa': {
+        folder: '',
+        getFileName: () => 'MeaCulpa-Regular.ttf',
+      },
+      Merriweather: {
+        folder: '',
+        getFileName: () => 'Merriweather-VariableFont_opsz,wdth,wght.ttf',
+      },
+      'Oleo Script': {
+        folder: '',
+        getFileName: () => 'OleoScript-Regular.ttf',
+      },
+      Pacifico: {
+        folder: '',
+        getFileName: () => 'Pacifico-Regular.ttf',
+      },
+      Parisienne: {
+        folder: '',
+        getFileName: () => 'Parisienne-Regular.ttf',
+      },
+      'Permanent Marker': {
+        folder: '',
+        getFileName: () => 'PermanentMarker-Regular.ttf',
+      },
+      'Pinyon Script': {
+        folder: '',
+        getFileName: () => 'PinyonScript-Regular.ttf',
+      },
+      Raleway: {
+        folder: '',
+        getFileName: () => 'Raleway-VariableFont_wght.ttf',
+      },
+      'Rouge Script': {
+        folder: '',
+        getFileName: () => 'RougeScript-Regular.ttf',
+      },
+      Sacramento: {
+        folder: '',
+        getFileName: () => 'Sacramento-Regular.ttf',
+      },
+      Satisfy: {
+        folder: '',
+        getFileName: () => 'Satisfy-Regular.ttf',
+      },
+      Tangerine: {
+        folder: '',
+        getFileName: () => 'Tangerine-Regular.ttf',
+      },
+      Yellowtail: {
+        folder: '',
+        getFileName: () => 'Yellowtail-Regular.ttf',
       },
     };
 
