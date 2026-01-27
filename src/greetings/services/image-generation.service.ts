@@ -555,23 +555,19 @@ export class ImageGenerationService {
             const fontBase64 = this.loadFontAsBase64(fontPath);
             if (fontBase64) {
               fontFamilyName = `font-${typedTextArea.id}`;
+              // NOTE: Do NOT wrap this in its own <defs>. We aggregate all
+              // defs into a single <defs> block later when building the final SVG.
               fontEmbed = `
-      <defs>
-        <style>
-          @font-face {
-            font-family: "${fontFamilyName}";
-            /*
-             * Sharp renders SVG via librsvg. It is picky about font MIME types;
-             * application/x-font-ttf is widely accepted, and we keep a fallback.
-             */
-            src:
-              url("data:application/x-font-ttf;base64,${fontBase64}") format("truetype"),
-              url("data:font/truetype;base64,${fontBase64}") format("truetype");
-            font-weight: ${fontWeight};
-            font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
-          }
-        </style>
-      </defs>`;
+      <style>
+        @font-face {
+          font-family: "${fontFamilyName}";
+          src:
+            url("data:application/x-font-ttf;base64,${fontBase64}") format("truetype"),
+            url("data:font/truetype;base64,${fontBase64}") format("truetype");
+          font-weight: ${fontWeight};
+          font-style: ${typedTextArea.italic ? 'italic' : 'normal'};
+        }
+      </style>`;
             } else {
               console.warn(
                 `[fonts] Failed to base64-load font at: ${fontPath} (falling back to system fonts)`,
@@ -598,12 +594,12 @@ export class ImageGenerationService {
           if (typedTextArea.textShadow) {
             filterId = `shadow-${typedTextArea.id}`;
             const shadow = typedTextArea.textShadow;
+            // As with fonts, we only return the inner <filter> element here.
+            // It will be wrapped in the shared <defs> block later.
             textShadowFilter = `
-      <defs>
-        <filter id="${filterId}" x="-50%" y="-50%" width="200%" height="200%">
-          <feDropShadow dx="${shadow.offsetX}" dy="${shadow.offsetY}" stdDeviation="${shadow.blur}" flood-color="${shadow.color}"/>
-        </filter>
-      </defs>`;
+      <filter id="${filterId}" x="-50%" y="-50%" width="200%" height="200%">
+        <feDropShadow dx="${shadow.offsetX}" dy="${shadow.offsetY}" stdDeviation="${shadow.blur}" flood-color="${shadow.color}"/>
+      </filter>`;
           }
 
           // Build background rectangle if enabled
