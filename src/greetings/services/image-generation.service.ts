@@ -647,12 +647,29 @@ export class ImageGenerationService {
     };
   }
 
+  private slugify(value: string): string {
+    return (
+      value
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 60) || 'greeting'
+    );
+  }
+
   async uploadGeneratedImage(
     image: { width: number; height: number; buffer: Buffer },
     rowNumber: number,
-    templateId: string,
+    recipientName?: string,
+    occasion?: string,
   ): Promise<{ width: number; height: number; url: string }> {
-    const fileName = `greetings/${templateId}_${rowNumber}_${image.width}x${image.height}.png`;
+    const occasionSlug = occasion ? this.slugify(occasion) : 'greeting';
+    const recipientSlug = recipientName
+      ? this.slugify(recipientName)
+      : 'recipient';
+    const fileName = `greetings/${recipientSlug}_${occasionSlug}_${rowNumber}_${image.width}x${image.height}.png`;
     const url = await this.uploadImage(image.buffer, fileName);
     return {
       width: image.width,

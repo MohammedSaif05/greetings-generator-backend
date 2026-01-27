@@ -67,11 +67,12 @@ export class GreetingsService {
           csvRow,
         );
 
-        // Upload image
+        // Upload image with meaningful file name including recipient and occasion
         const imageUrl = await this.imageGenerationService.uploadGeneratedImage(
           image,
           rowNumber,
-          templateId,
+          csvRow.recipientName,
+          csvRow.occasion,
         );
 
         // Store greeting record
@@ -154,11 +155,12 @@ export class GreetingsService {
       csvRow,
     );
 
-    // Step 4: Upload image
+    // Step 4: Upload image with meaningful file name including recipient and occasion
     const imageUrl = await this.imageGenerationService.uploadGeneratedImage(
       image,
       1, // rowNumber is 1 for single greeting
-      requestDto.templateId,
+      requestDto.recipientName,
+      requestDto.occasion,
     );
 
     // Step 5: Store greeting record
