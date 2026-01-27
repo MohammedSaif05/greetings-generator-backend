@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import sharp from 'sharp';
+import { Resvg } from '@resvg/resvg-js';
 import { TemplateDocument } from '../../templates/schemas/template.schema';
 import { CsvRowDto } from '../dto/csv-row.dto';
 import { R2Service } from '../../services/r2.service';
@@ -500,28 +501,20 @@ export class ImageGenerationService {
       template.backgroundImage.url,
     );
 
-    // Load image with sharp and resize to template canvas size first
-    let image = sharp(backgroundImageBuffer);
-
-    // Get image metadata
-    const metadata = await image.metadata();
-    const originalWidth = metadata.width || template.canvas.width;
-    const originalHeight = metadata.height || template.canvas.height;
-
-    // Resize to template canvas size if needed (do this BEFORE rendering text)
-    if (
-      originalWidth !== template.canvas.width ||
-      originalHeight !== template.canvas.height
-    ) {
-      image = image.resize(template.canvas.width, template.canvas.height, {
+    // Normalize background size to the template canvas before embedding into SVG
+    const baseBackground = await sharp(backgroundImageBuffer)
+      .resize(template.canvas.width, template.canvas.height, {
         fit: 'cover',
-      });
-    }
+      })
+      .png()
+      .toBuffer();
+    const baseBackgroundBase64 = baseBackground.toString('base64');
 
-    // Collect all SVG overlays for text areas
-    const svgOverlays: Array<{ input: Buffer; top: number; left: number }> = [];
+    // Collect text elements and defs once; we'll render everything in a single SVG
+    const svgTextElements: string[] = [];
+    const svgDefs: string[] = [];
 
-    // Build SVG overlays for each text area
+    // Build SVG fragments for each text area
     for (const textArea of template.textAreas) {
       const typedTextArea = textArea as TextArea;
       const fieldName = this.mapTextAreaToField(typedTextArea.id);
@@ -694,60 +687,43 @@ export class ImageGenerationService {
           const rotatedGroupEnd = rotation !== 0 ? `</g>` : '';
 
           // Create SVG with font, background, text shadow, and text
-          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${fontEmbed}${textShadowFilter}${backgroundRect}${rotatedGroupStart}${textElements}${rotatedGroupEnd}
-    </svg>`;
-
-          // Optional debug hook: upload one SVG overlay to R2 so we can
-          // inspect fonts and layout in a browser. Enabled only when the
-          // DEBUG_FONTS env variable is set (and only for the first area).
-          if (process.env.DEBUG_FONTS === '1' && svgOverlays.length === 0) {
-            try {
-              const debugKey = `debug/svg/debug-text-${Date.now()}-${
-                typedTextArea.id
-              }.svg`;
-              this.r2Service
-                .uploadBuffer(
-                  Buffer.from(svgText, 'utf-8'),
-                  debugKey,
-                  'image/svg+xml',
-                )
-                .then((url) => {
-                  console.log(
-                    `[fonts-debug] Uploaded debug SVG for "${fontFamily}" to: ${url}`,
-                  );
-                })
-                .catch((err) => {
-                  console.warn(
-                    `[fonts-debug] Failed to upload debug SVG:`,
-                    err,
-                  );
-                });
-            } catch (err) {
-              console.warn(
-                '[fonts-debug] Error scheduling debug SVG upload:',
-                err,
-              );
-            }
+          // Collect defs (font + shadow) and text/background elements
+          if (fontEmbed) {
+            svgDefs.push(fontEmbed);
           }
-
-          svgOverlays.push({
-            input: Buffer.from(svgText),
-            top: 0,
-            left: 0,
-          });
+          if (textShadowFilter) {
+            svgDefs.push(textShadowFilter);
+          }
+          if (backgroundRect) {
+            svgTextElements.push(backgroundRect);
+          }
+          svgTextElements.push(
+            `${rotatedGroupStart}${textElements}${rotatedGroupEnd}`,
+          );
         }
       }
     }
 
-    // Apply all text overlays at once using composite
-    // This ensures text is baked into the image before any resizing
-    if (svgOverlays.length > 0) {
-      image = image.composite(svgOverlays);
-    }
+    // Build a single SVG that includes the background image and all text
+    const svg = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    ${svgDefs.join('\n')}
+  </defs>
+  <image href="data:image/png;base64,${baseBackgroundBase64}" x="0" y="0" width="${template.canvas.width}" height="${template.canvas.height}" />
+  ${svgTextElements.join('\n')}
+</svg>`;
 
-    // CRITICAL: Generate base image with text baked in BEFORE resizing
-    // This ensures all text is rendered and saved to the buffer
-    const baseImageBuffer = await image.png().toBuffer();
+    // Rasterize SVG with resvg (which has robust @font-face support)
+    // The Resvg constructor and render() are provided by an external library
+    // with its own typings; locally we treat them as safe here.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+    const resvg = new Resvg(svg, {
+      fitTo: {
+        mode: 'original',
+      },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const baseImageBuffer = Buffer.from(resvg.render().asPng());
 
     // Determine target resolution based on template orientation
     let targetWidth: number;
