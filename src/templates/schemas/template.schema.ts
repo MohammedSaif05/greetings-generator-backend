@@ -50,6 +50,12 @@ export class Template {
         minFontSize: Number,
         textAlign: String,
         lineHeight: Number,
+        underline: Boolean,
+        italic: Boolean,
+        bold: Boolean,
+        rotation: Number,
+        outlineWidth: Number,
+        outlineColor: String,
         textShadow: {
           offsetX: Number,
           offsetY: Number,
@@ -79,6 +85,12 @@ export class Template {
     minFontSize: number;
     textAlign: string;
     lineHeight: number;
+    underline?: boolean;
+    italic?: boolean;
+    bold?: boolean;
+    rotation?: number;
+    outlineWidth?: number;
+    outlineColor?: string;
     textShadow?: {
       offsetX: number;
       offsetY: number;

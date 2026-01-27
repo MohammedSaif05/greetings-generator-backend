@@ -26,6 +26,12 @@ interface TextArea {
   minFontSize: number;
   textAlign: string;
   lineHeight: number;
+  underline?: boolean;
+  italic?: boolean;
+  bold?: boolean;
+  rotation?: number;
+  outlineWidth?: number;
+  outlineColor?: string;
   textShadow?: {
     offsetX: number;
     offsetY: number;
@@ -458,11 +464,14 @@ export class ImageGenerationService {
       if (fieldName) {
         const text = csvRow[fieldName];
         if (text && text.trim() !== '') {
-          // Get font weight
-          const fontWeight =
+          // Get font weight (allow bold flag to influence)
+          const baseWeight =
             typedTextArea.fontWeight !== undefined
               ? typedTextArea.fontWeight
               : 400;
+          const fontWeight = typedTextArea.bold
+            ? Math.max(baseWeight, 700)
+            : baseWeight;
 
           // Calculate optimal font size and wrap text
           const initialFontSize = Math.min(
@@ -566,6 +575,15 @@ export class ImageGenerationService {
             textX = typedTextArea.x;
           }
 
+          const textDecoration = typedTextArea.underline ? 'underline' : 'none';
+          const fontStyle = typedTextArea.italic ? 'italic' : 'normal';
+          const outlineWidth = typedTextArea.outlineWidth || 0;
+          const outlineColor = typedTextArea.outlineColor || '#000000';
+          const strokeAttr =
+            outlineWidth > 0
+              ? `stroke="${outlineColor}" stroke-width="${outlineWidth}" paint-order="stroke" stroke-linejoin="round"`
+              : '';
+
           const textElements = lines
             .map((line, index) => {
               const y = startY + index * lineSpacing;
@@ -576,16 +594,29 @@ export class ImageGenerationService {
           font-family="${fontFamilyName}, ${fontFamily}, Arial, sans-serif"
           font-size="${fontSize}px"
           font-weight="${fontWeight}"
+          font-style="${fontStyle}"
           fill="${typedTextArea.fontColor}"
           text-anchor="${textAnchor}"
+          text-decoration="${textDecoration}"
           dominant-baseline="baseline"
           ${filterId ? `filter="url(#${filterId})"` : ''}
+          ${strokeAttr}
         >${this.escapeXml(line)}</text>`;
             })
             .join('');
 
+          // Apply rotation (around text area's center) if provided
+          const rotation = typedTextArea.rotation || 0;
+          const rotateCx = typedTextArea.x + typedTextArea.width / 2;
+          const rotateCy = typedTextArea.y + typedTextArea.height / 2;
+          const rotatedGroupStart =
+            rotation !== 0
+              ? `<g transform="rotate(${rotation} ${rotateCx} ${rotateCy})">`
+              : '';
+          const rotatedGroupEnd = rotation !== 0 ? `</g>` : '';
+
           // Create SVG with font, background, text shadow, and text
-          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${fontEmbed}${textShadowFilter}${backgroundRect}${textElements}
+          const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${fontEmbed}${textShadowFilter}${backgroundRect}${rotatedGroupStart}${textElements}${rotatedGroupEnd}
     </svg>`;
 
           svgOverlays.push({

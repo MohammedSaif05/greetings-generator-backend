@@ -128,6 +128,35 @@ export class TextAreaDto {
   @Max(3)
   lineHeight: number;
 
+  @IsBoolean()
+  @IsOptional()
+  underline?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  italic?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  bold?: boolean;
+
+  @IsNumber()
+  @Min(-360)
+  @Max(360)
+  @IsOptional()
+  rotation?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(50)
+  @IsOptional()
+  outlineWidth?: number;
+
+  @IsString()
+  @IsHexColor()
+  @IsOptional()
+  outlineColor?: string;
+
   @IsObject()
   @ValidateNested()
   @Type(() => TextShadowDto)
