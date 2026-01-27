@@ -697,6 +697,39 @@ export class ImageGenerationService {
           const svgText = `<svg width="${template.canvas.width}" height="${template.canvas.height}" xmlns="http://www.w3.org/2000/svg">${fontEmbed}${textShadowFilter}${backgroundRect}${rotatedGroupStart}${textElements}${rotatedGroupEnd}
     </svg>`;
 
+          // Optional debug hook: upload one SVG overlay to R2 so we can
+          // inspect fonts and layout in a browser. Enabled only when the
+          // DEBUG_FONTS env variable is set (and only for the first area).
+          if (process.env.DEBUG_FONTS === '1' && svgOverlays.length === 0) {
+            try {
+              const debugKey = `debug/svg/debug-text-${Date.now()}-${
+                typedTextArea.id
+              }.svg`;
+              this.r2Service
+                .uploadBuffer(
+                  Buffer.from(svgText, 'utf-8'),
+                  debugKey,
+                  'image/svg+xml',
+                )
+                .then((url) => {
+                  console.log(
+                    `[fonts-debug] Uploaded debug SVG for "${fontFamily}" to: ${url}`,
+                  );
+                })
+                .catch((err) => {
+                  console.warn(
+                    `[fonts-debug] Failed to upload debug SVG:`,
+                    err,
+                  );
+                });
+            } catch (err) {
+              console.warn(
+                '[fonts-debug] Error scheduling debug SVG upload:',
+                err,
+              );
+            }
+          }
+
           svgOverlays.push({
             input: Buffer.from(svgText),
             top: 0,
