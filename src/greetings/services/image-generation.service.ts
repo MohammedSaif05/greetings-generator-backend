@@ -646,7 +646,7 @@ export class ImageGenerationService {
         <text
           x="${textX}"
           y="${y}"
-          font-family="${fontFamilyName}", "${fontFamily}", Arial, sans-serif
+          font-family="${fontFamilyName}, ${fontFamily}, Arial, sans-serif"
           font-size="${fontSize}px"
           font-weight="${fontWeight}"
           font-style="${fontStyle}"
