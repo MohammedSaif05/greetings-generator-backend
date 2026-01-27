@@ -237,123 +237,123 @@ export class ImageGenerationService {
 
       // Handwritten / script fonts (single-regular weights)
       'Alex Brush': {
-        folder: '',
+        folder: 'Alex_Brush',
         getFileName: () => 'AlexBrush-Regular.ttf',
       },
       Allura: {
-        folder: '',
+        folder: 'Allura',
         getFileName: () => 'Allura-Regular.ttf',
       },
       Caveat: {
-        folder: '',
+        folder: 'Caveat',
         getFileName: () => 'Caveat-Regular.ttf',
       },
       'Cedarville Cursive': {
-        folder: '',
+        folder: 'Cedarville_Cursive',
         getFileName: () => 'CedarvilleCursive-Regular.ttf',
       },
       'Dancing Script': {
-        folder: '',
+        folder: 'Dancing_Script',
         getFileName: () => 'DancingScript-Regular.ttf',
       },
       'Euphoria Script': {
-        folder: '',
+        folder: 'Euphoria_Script',
         getFileName: () => 'EuphoriaScript-Regular.ttf',
       },
       Festive: {
-        folder: '',
+        folder: 'Festive',
         getFileName: () => 'Festive-Regular.ttf',
       },
       'Grand Hotel': {
-        folder: '',
+        folder: 'Grand_Hotel',
         getFileName: () => 'GrandHotel-Regular.ttf',
       },
       'Great Vibes': {
-        folder: '',
+        folder: 'Great_Vibes',
         getFileName: () => 'GreatVibes-Regular.ttf',
       },
       'Indie Flower': {
-        folder: '',
+        folder: 'Indie_Flower',
         getFileName: () => 'IndieFlower-Regular.ttf',
       },
       'Ingrid Darling': {
-        folder: '',
+        folder: 'Ingrid_Darling',
         getFileName: () => 'IngridDarling-Regular.ttf',
       },
       Italianno: {
-        folder: '',
+        folder: 'Italianno',
         getFileName: () => 'Italianno-Regular.ttf',
       },
       'Just Another Hand': {
-        folder: '',
+        folder: 'Just_Another_Hand',
         getFileName: () => 'JustAnotherHand-Regular.ttf',
       },
       'Kaushan Script': {
-        folder: '',
+        folder: 'Kaushan_Script',
         getFileName: () => 'KaushanScript-Regular.ttf',
       },
       Lobster: {
-        folder: '',
+        folder: 'Lobster',
         getFileName: () => 'Lobster-Regular.ttf',
       },
       'Lovers Quarrel': {
-        folder: '',
+        folder: 'Lovers_Quarrel',
         getFileName: () => 'LoversQuarrel-Regular.ttf',
       },
       'Marck Script': {
-        folder: '',
+        folder: 'Marck_Script',
         getFileName: () => 'MarckScript-Regular.ttf',
       },
       'Mea Culpa': {
-        folder: '',
+        folder: 'Mea_Culpa',
         getFileName: () => 'MeaCulpa-Regular.ttf',
       },
       Merriweather: {
-        folder: '',
+        folder: 'Merriweather',
         getFileName: () => 'Merriweather-VariableFont_opsz,wdth,wght.ttf',
       },
       'Oleo Script': {
-        folder: '',
+        folder: 'Oleo_Script',
         getFileName: () => 'OleoScript-Regular.ttf',
       },
       Pacifico: {
-        folder: '',
+        folder: 'Pacifico',
         getFileName: () => 'Pacifico-Regular.ttf',
       },
       Parisienne: {
-        folder: '',
+        folder: 'Parisienne',
         getFileName: () => 'Parisienne-Regular.ttf',
       },
       'Permanent Marker': {
-        folder: '',
+        folder: 'Permanent_Marker',
         getFileName: () => 'PermanentMarker-Regular.ttf',
       },
       'Pinyon Script': {
-        folder: '',
+        folder: 'Pinyon_Script',
         getFileName: () => 'PinyonScript-Regular.ttf',
       },
       Raleway: {
-        folder: '',
+        folder: 'Raleway',
         getFileName: () => 'Raleway-VariableFont_wght.ttf',
       },
       'Rouge Script': {
-        folder: '',
+        folder: 'Rouge_Script',
         getFileName: () => 'RougeScript-Regular.ttf',
       },
       Sacramento: {
-        folder: '',
+        folder: 'Sacramento',
         getFileName: () => 'Sacramento-Regular.ttf',
       },
       Satisfy: {
-        folder: '',
+        folder: 'Satisfy',
         getFileName: () => 'Satisfy-Regular.ttf',
       },
       Tangerine: {
-        folder: '',
+        folder: 'Tangerine',
         getFileName: () => 'Tangerine-Regular.ttf',
       },
       Yellowtail: {
-        folder: '',
+        folder: 'Yellowtail',
         getFileName: () => 'Yellowtail-Regular.ttf',
       },
     };
