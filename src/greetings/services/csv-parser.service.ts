@@ -6,6 +6,7 @@ import { CsvRowDto } from '../dto/csv-row.dto';
 export class CsvParserService {
   private readonly MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   private readonly REQUIRED_HEADERS = [
+    'templateId',
     'recipientName',
     'occasion',
     'message',
@@ -110,6 +111,7 @@ export class CsvParserService {
       }
 
       parsedRows.push({
+        templateId: (row.templateId || '').trim(),
         recipientName: (row.recipientName || '').trim(),
         occasion: (row.occasion || '').trim(),
         message: message.trim(),

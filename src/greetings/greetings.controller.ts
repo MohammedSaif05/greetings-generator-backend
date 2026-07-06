@@ -19,21 +19,13 @@ export class GreetingsController {
   @UseInterceptors(FileInterceptor('file'))
   async processBulkGreetings(
     @UploadedFile() file: Express.Multer.File,
-    @Body('templateId') templateId: string,
   ): Promise<BulkGreetingResponseDto> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
-    if (!templateId || templateId.trim() === '') {
-      throw new BadRequestException('templateId is required');
-    }
-
     try {
-      return await this.greetingsService.processBulkGreetings(
-        file,
-        templateId.trim(),
-      );
+      return await this.greetingsService.processBulkGreetings(file);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';

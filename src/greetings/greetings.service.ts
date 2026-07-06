@@ -30,37 +30,44 @@ export class GreetingsService {
 
   async processBulkGreetings(
     file: Express.Multer.File,
-    templateId: string,
   ): Promise<BulkGreetingResponseDto> {
     // Step 1: Parse CSV
     const csvRows = this.csvParserService.parseCsv(file);
 
-    // Step 2: Load and validate template
-    const template = await this.templateModel.findOne({
-      templateId: templateId,
-    });
-
-    if (!template) {
-      throw new NotFoundException(
-        `Template with templateId "${templateId}" not found`,
-      );
-    }
-
-    if (template.status !== 'ACTIVE') {
-      throw new BadRequestException(
-        `Template "${templateId}" is not ACTIVE (status: ${template.status})`,
-      );
-    }
-
-    // Step 4: Process each row
+    // Step 2: Process each row with template caching
     const results: GreetingResult[] = [];
     let generatedCount = 0;
+    const templateCache: Record<string, TemplateDocument> = {};
 
     for (let i = 0; i < csvRows.length; i++) {
       const csvRow = csvRows[i];
-      const rowNumber = i + 1;
+      const rowNumber = i + 2; // +2 because: 1 for header row, 1 for 0-index
 
       try {
+        const templateId = csvRow.templateId;
+        
+        // Load and validate template
+        if (!templateCache[templateId]) {
+          const fetchedTemplate = await this.templateModel.findOne({
+            templateId: templateId,
+          });
+
+          if (!fetchedTemplate) {
+            throw new NotFoundException(
+              `Template with templateId "${templateId}" not found`,
+            );
+          }
+
+          if (fetchedTemplate.status !== 'ACTIVE') {
+            throw new BadRequestException(
+              `Template "${templateId}" is not ACTIVE (status: ${fetchedTemplate.status})`,
+            );
+          }
+          
+          templateCache[templateId] = fetchedTemplate;
+        }
+
+        const template = templateCache[templateId];
         // Generate image
         const image = await this.imageGenerationService.generateGreetingImage(
           template,
@@ -77,7 +84,7 @@ export class GreetingsService {
 
         // Store greeting record
         const greetingData = {
-          templateId: templateId,
+          templateId: csvRow.templateId,
           recipientName: csvRow.recipientName,
           occasion: csvRow.occasion,
           message: csvRow.message,
@@ -96,7 +103,7 @@ export class GreetingsService {
 
         results.push({
           row: rowNumber,
-          templateId: templateId,
+          templateId: csvRow.templateId,
           image: imageUrl,
         });
 
