@@ -150,6 +150,7 @@ export class GreetingsService {
 
     // Step 2: Convert request to CsvRowDto format for image generation
     const csvRow: CsvRowDto = {
+      templateId: requestDto.templateId,
       recipientName: requestDto.recipientName,
       occasion: requestDto.occasion,
       message: requestDto.message,
